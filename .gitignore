@@ -34,6 +34,11 @@ yarn-error.log*
 .env*
 !.env.example
 
+# secrets / recovery codes — never commit
+recovery-codes.txt
+*.recovery.txt
+secrets/
+
 # vercel
 .vercel
 
