@@ -52,7 +52,88 @@ Everything below is just wiring those three together.
 
 ---
 
-## 3. What's been done so far
+## 3. Why Neon and not a "normal" Postgres setup
+
+### How Postgres normally works
+
+Postgres is a **server program** — a process that runs all the time, listens on a network
+port (5432), owns a folder on disk where the data physically lives, and answers queries
+from clients. Your app is a **client**: it opens a connection, sends SQL, gets rows back.
+
+```
+  your app  ──connection──▶  postgres server (running 24/7)  ──▶  data on disk
+```
+
+The server has to stay running because it holds the data, manages locking between
+simultaneous writers, and safely flushes changes to disk.
+
+### The "proper" setup, without Neon
+
+**For local development:** install Postgres (`brew install postgresql`), initialise a data
+folder, start the background process, create a user and a database. It runs while your
+laptop is on.
+
+**For production**, someone has to run that same always-on server somewhere:
+
+| Approach | What you're signing up for |
+|---|---|
+| **Self-host on a rented Linux box** | You install and run Postgres yourself. Now you own: backups, security patches, disk monitoring, replication, failover when the box dies, performance tuning. A real ongoing job. |
+| **Managed instance** (AWS RDS, Google Cloud SQL, DigitalOcean) | The provider runs and patches it. But it's **on 24/7 whether you use it or not** — you pay per hour (~$15–50/mo for a small one) and still pick an instance size and worry about connection limits. |
+| **Neon** (managed + serverless) | Provider runs it *and* the compute sleeps when idle, wakes on the next query. Pay for actual usage. No instance size to choose. |
+
+### The connection problem that makes Neon fit Vercel
+
+A traditional Postgres server gives every open connection its own process and chunk of RAM,
+so it caps out around **100 connections**. That's fine for a normal always-on app server
+that opens ~10 connections once and reuses them.
+
+But Vercel is **serverless**: every page request spins up a fresh, short-lived function.
+Under load that's hundreds of functions, each opening its own connection → you blow past the
+limit → `too many connections` → site down. The functions are also too short-lived to reuse
+a connection pool.
+
+Neon is built for this:
+- **Storage separated from compute** — the data lives in Neon's storage layer; the Postgres
+  compute is stateless and can be killed/restarted freely. That's what lets it scale to zero
+  and wake in a few hundred milliseconds.
+- **A connection pooler** (the `-pooler` bit in your connection string) funnels thousands of
+  function connections onto a few real ones.
+- **An HTTP query API** (`@neondatabase/serverless`) — one HTTPS request per query, no
+  persistent connection at all, which is exactly the shape a serverless function wants.
+- **Branching** — it can fork the whole database instantly (copy-on-write), so each Vercel
+  preview deploy can get its own throwaway copy of the data.
+
+### Why Neon for *this* project
+
+- **Zero setup / zero maintenance** — no install, no patching, no backups to run.
+- **Costs ~$0** — the Free plan needs no credit card and doesn't do overage billing; a
+  personal recipe app stays far inside the limits. Scale-to-zero means you're not paying for
+  an idle machine.
+- **Solves the Vercel connection problem out of the box** — no PgBouncer to bolt on.
+- **Still real Postgres** — standard SQL and wire protocol; `pg_dump` and move elsewhere any
+  time. Low lock-in at the data layer.
+- **Region colocation** — Neon in Frankfurt, Vercel functions in `fra1`, so the app↔DB hop
+  is a few milliseconds.
+
+### When you'd want the "proper" always-on setup instead
+
+- **Steady, high traffic** — if the database is queried constantly, scale-to-zero buys you
+  nothing and a fixed-size instance is cheaper and has no cold starts.
+- **You need full transaction support everywhere** — the HTTP driver can't do transactions
+  spanning multiple statements or `LISTEN/NOTIFY`; you'd move to a normal connection.
+- **Deep control** — custom C extensions, specific server tuning, access to the host.
+- **The app doesn't run on serverless** — a long-lived Node server on a VPS or a container
+  has no connection-explosion problem, so a plain managed instance is simple and fine.
+- **Regulatory / data-residency rules** that dictate where and how the DB is run.
+- **A team that already operates its own Postgres** — reuse the expertise and tooling.
+
+**The cost of Neon, honestly:** sub-second cold starts after idle, less server-level
+control, the HTTP driver's limits, and dependence on one newish vendor's platform (the data
+is portable; the branching and pooler tooling is not).
+
+---
+
+## 4. What's been done so far
 
 ### Step A — Created the Next.js app
 **Command:** `npx create-next-app@latest .`
@@ -133,7 +214,7 @@ extensions always mess with `<html>`/`<body>`.
 
 ---
 
-## 4. What's left to finish days 1–2
+## 5. What's left to finish days 1–2
 
 Goal: **empty app, live on the internet, talking to the database.**
 
@@ -176,7 +257,7 @@ choice yet — go read, then write it. Ask for an explanation, not for the text.
 
 ---
 
-## 5. What comes after (the rest of the SPEC)
+## 6. What comes after (the rest of the SPEC)
 
 | Days | Focus | Key idea you're learning |
 |---|---|---|
@@ -190,7 +271,7 @@ choice yet — go read, then write it. Ask for an explanation, not for the text.
 
 ---
 
-## 6. Quick command reference
+## 7. Quick command reference
 
 | Command | What it does |
 |---|---|
