@@ -9,9 +9,9 @@ understand the choice yet.
 ---
 
 <!--
-Entries still owed (from the tech-choices table in SPEC.md) — write each one yourself:
+Entries still owed (from the tech-choices table in SPEC.md). Write each one yourself:
 - Database host: Postgres on Neon
-- ORM: Drizzle (vs Prisma — note the "magic vs explicit" tradeoff)
+- ORM: Drizzle (vs Prisma, note the "magic vs explicit" tradeoff)
 - Auth: password gate in middleware
 - Styling: Tailwind
 - URL parsing: native fetch + JSON-LD

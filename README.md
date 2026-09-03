@@ -1,7 +1,7 @@
 # recipe-fetcher
 
 Capture, store, and find recipes so "I feel like baking" starts with a list instead of
-scrolling Instagram saves. Side project 1 of the full-stack track — see [SPEC.md](./SPEC.md)
+scrolling Instagram saves. Side project 1 of the full-stack track. See [SPEC.md](./SPEC.md)
 for scope and [DECISIONS.md](./DECISIONS.md) for the choices log.
 
 ## Stack
@@ -33,7 +33,7 @@ npm run dev
 
 ```
 app/            routes (App Router)
-db/schema.ts    Drizzle schema — recipe, tag, recipe_tag
+db/schema.ts    Drizzle schema: recipe, tag, recipe_tag
 db/index.ts     Drizzle client (Neon HTTP driver)
 db/migrations/  generated SQL migrations
 ```
