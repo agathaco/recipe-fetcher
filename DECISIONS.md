@@ -44,8 +44,41 @@ in my own words. Checked means the entry is written.
 - [x] revalidatePath and the caching model: when a page is cached and what busts it (days 5-6)
 - [ ] Data model shape: `ingredients` and `steps` as freeform text, not normalised tables;
       the `recipe_tag` many-to-many (already in the schema)
-- [ ] `searchParams` in the URL as filter and search state, not React state (day 8)
+- [x] `searchParams` in the URL as filter and search state, not React state (day 8)
 - [ ] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
+
+---
+
+## The URL as filter/search state, not React state
+
+**Date:** 04/09/2026
+
+**Context:** The list page needs to filter by tag and search by title. The list page is a
+Server Component with no client JS at all, so adding a filter meant deciding where that
+"which recipes am I looking at" state actually lives.
+
+**Options I considered:**
+- `useState` in a Client Component: hold the tag/search text in memory, filter or refetch on change
+- `searchParams`: read `?tag=` and `?q=` straight off the URL in the Server Component, drive
+  filtering with plain `<Link>`s and a native GET `<form>`
+
+**Chose:** `searchParams`.
+
+**Why:** the list page had zero client JS before this and I wanted to keep it that way, so
+`useState` would mean turning a plain Server Component into a Client Component for no
+interactivity gain. The URL is also just the correct model for this: which recipes I'm
+looking at should be shareable, bookmarkable, and survive a refresh, none of which a
+`useState` filter does. It also meant no client JS was needed at all: tag pills are plain
+links to `/?tag=x`, and the search box is a native `<form method="get">` the browser turns
+into that same kind of URL on submit. The database does the actual filtering (a real SQL
+`ILIKE`, a real join), not the browser.
+
+**What I'd revisit this under:** if search needed to feel instant while typing (live
+results, no navigation), that wants client state and a debounced fetch, at which point I'd
+still keep the URL in sync for shareability rather than dropping it.
+
+**Confidence:** high. This is a well-worn Next.js pattern and I can see exactly why it fits
+here: no interactivity was needed, just different data based on the URL.
 
 ---
 
