@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/db";
 import { recipes } from "@/db/schema";
+import { captureFromInstagramUrl, captureFromWebUrl, isInstagramUrl } from "@/app/lib/capture";
 
 // Everything in this file runs only on the server. It is imported by forms and
 // invoked over the network as a POST, so it must validate its own input.
@@ -30,7 +31,8 @@ export async function createRecipe(formData: FormData) {
     .values({
       title,
       sourceUrl: strOrNull(formData.get("sourceUrl")),
-      sourceType: "manual",
+      sourceType: strOrNull(formData.get("sourceType")) ?? "manual",
+      imageUrl: strOrNull(formData.get("imageUrl")),
       ingredients: strOrNull(formData.get("ingredients")),
       steps: strOrNull(formData.get("steps")),
       notes: strOrNull(formData.get("notes")),
@@ -77,4 +79,35 @@ export async function deleteRecipe(id: string) {
 
   revalidatePath("/");
   redirect("/");
+}
+
+// The "paste a URL" mini-form on the add-recipe page. This never writes to
+// the database itself: it fetches, tries to extract a recipe, and hands
+// whatever it found to the real add-recipe form via the URL, as searchParams.
+// If nothing was found, every field is simply absent and the form is empty,
+// the "paste it yourself" rung of the fallback ladder.
+export async function importFromUrl(formData: FormData) {
+  const url = str(formData.get("importUrl"));
+  const params = new URLSearchParams();
+
+  if (url) {
+    const instagram = isInstagramUrl(url);
+    const captured = instagram ? await captureFromInstagramUrl(url) : await captureFromWebUrl(url);
+
+    params.set("sourceUrl", url);
+    params.set("sourceType", instagram ? "instagram" : "web");
+    if (!captured) {
+      params.set("importFailed", "1");
+    } else {
+      if (captured.title) params.set("title", captured.title);
+      if (captured.ingredients) params.set("ingredients", captured.ingredients);
+      if (captured.steps) params.set("steps", captured.steps);
+      if (captured.notes) params.set("notes", captured.notes);
+      if (captured.imageUrl) params.set("imageUrl", captured.imageUrl);
+    }
+  }
+
+  // redirect() throws internally, so it must run outside any try/catch —
+  // catching it here would swallow the redirect instead of performing it.
+  redirect(`/recipes/new?${params.toString()}`);
 }

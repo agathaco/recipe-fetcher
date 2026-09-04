@@ -41,4 +41,25 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   day 9 alongside the want-to-make toggle.
 - **Taught:** passing extra arguments to a Server Action, splitting read helpers from write
   actions.
-- Next: the caching model in depth (the DECISIONS entry), then day 7 URL capture.
+- Decided to keep `force-dynamic` everywhere rather than move to cache-plus-revalidate: it's
+  the simple, hard-to-get-wrong option, and the caching layers aren't well enough understood
+  yet to trust the alternative. DECISIONS entry written honestly at "still fuzzy" confidence.
+
+## Day 7: URL capture
+
+- `app/lib/capture.ts`: `captureFromWebUrl` fetches a page server-side and parses its
+  `Recipe` JSON-LD (handles `@graph`-nested nodes, array or string `recipeInstructions`,
+  and unquoted `type=application/ld+json` attributes, found in the wild on a real site).
+  `captureFromInstagramUrl` calls the oEmbed endpoint for a caption and thumbnail; expected
+  to fail often since Instagram restricts oEmbed access, which is exactly why it degrades
+  quietly instead of erroring.
+- `importFromUrl` action: fetches, then redirects to `/recipes/new` carrying whatever it
+  found as query params. No DB write of its own.
+- `/recipes/new` reads `searchParams` to pre-fill the existing form; shows a fallback notice
+  ("paste it yourself") when nothing was found.
+- Tested end to end against a real site (loveandlemons.com): title, ingredients, steps,
+  notes, and image all extracted and saved correctly. Also tested the failure path (a
+  nonexistent domain) to confirm the fallback message shows.
+- **Taught:** `searchParams` as a page prop, server-side third-party `fetch`, a mutation
+  that redirects with data instead of writing to the DB, real-world HTML being messier than
+  the spec (the unquoted-attribute bug).
