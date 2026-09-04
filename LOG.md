@@ -63,3 +63,25 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
 - **Taught:** `searchParams` as a page prop, server-side third-party `fetch`, a mutation
   that redirects with data instead of writing to the DB, real-world HTML being messier than
   the spec (the unquoted-attribute bug).
+
+## Day 8: tags, filter, search
+
+- `app/lib/actions.ts`: `setRecipeTags(recipeId, tagsInput)`, a comma-separated `tags` field
+  parsed, deduped, lowercased. Delete-then-reinsert into `recipe_tag` so removing a tag from
+  the input actually removes the link, not just additive. Wired into `createRecipe` and
+  `updateRecipe`. Both add/edit forms got a `tags` text input.
+- `app/lib/data.ts`: `getRecipeById` now uses Drizzle's relational query API (`with`) to
+  pull a recipe's tags in one query. `getRecipes({ tag, q })` does a manual `LEFT JOIN` across
+  recipe/recipe_tag/tag, groups rows into one-per-recipe in JS, and filters by tag after
+  grouping (filtering in SQL would have dropped a matching recipe's *other* tags, since the
+  join fans out to one row per tag). Search (`q`) is a real SQL `ILIKE` on the title.
+  `getAllTagNames()` for the filter pill list.
+- `app/page.tsx`: tag pills are `<Link>`s to `/?tag=x`, a plain GET `<form>` for search (no
+  JS, the browser turns submit into `/?q=...`), both readable from `searchParams`. Detail
+  page shows each recipe's tags as links back to the filtered list.
+- Tested end to end: filter by tag, search by title, both combined, tag dedup/case-folding on
+  create, and edit correctly removing a tag no longer in the input with zero orphaned
+  `recipe_tag` rows after a delete (cascade works).
+- **Taught:** the URL as the single source of truth for filter/search state, a plain HTML
+  GET form as a zero-JS search box, when to reach for a manual join+group instead of the
+  ORM's relational `with`.

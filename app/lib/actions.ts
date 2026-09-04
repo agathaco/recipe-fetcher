@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
-import { recipes } from "@/db/schema";
+import { recipeTags, recipes, tags } from "@/db/schema";
 import { captureFromInstagramUrl, captureFromWebUrl, isInstagramUrl } from "@/app/lib/capture";
 
 // Everything in this file runs only on the server. It is imported by forms and
@@ -18,6 +18,39 @@ function str(value: FormDataEntryValue | null): string {
 function strOrNull(value: FormDataEntryValue | null): string | null {
   const s = str(value);
   return s === "" ? null : s;
+}
+
+// Replaces a recipe's whole tag set with the comma-separated list from the
+// form. Delete-then-reinsert is the simplest correct way to handle removals:
+// a tag left out of the input should stop being linked to this recipe.
+async function setRecipeTags(recipeId: string, tagsInput: FormDataEntryValue | null) {
+  const names = Array.from(
+    new Set(
+      str(tagsInput)
+        .split(",")
+        .map((name) => name.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+
+  await db.delete(recipeTags).where(eq(recipeTags.recipeId, recipeId));
+  if (names.length === 0) return;
+
+  // Find-or-create each tag, then link it. One recipe has only a handful of
+  // tags, so a few small queries here stays simple and readable; this would
+  // be worth batching into fewer round trips if that ever stopped being true.
+  for (const name of names) {
+    const [tag] = await db
+      .insert(tags)
+      .values({ name })
+      .onConflictDoNothing({ target: tags.name })
+      .returning();
+
+    const tagId = tag?.id ?? (await db.select().from(tags).where(eq(tags.name, name)))[0]?.id;
+    if (!tagId) continue;
+
+    await db.insert(recipeTags).values({ recipeId, tagId }).onConflictDoNothing();
+  }
 }
 
 export async function createRecipe(formData: FormData) {
@@ -39,6 +72,8 @@ export async function createRecipe(formData: FormData) {
       wantToMake: formData.get("wantToMake") === "on",
     })
     .returning();
+
+  await setRecipeTags(created.id, formData.get("tags"));
 
   // Bust the cached list page so the new recipe shows up.
   revalidatePath("/");
@@ -65,6 +100,8 @@ export async function updateRecipe(id: string, formData: FormData) {
       wantToMake: formData.get("wantToMake") === "on",
     })
     .where(eq(recipes.id, id));
+
+  await setRecipeTags(id, formData.get("tags"));
 
   // Both the list (title/badge can change) and this recipe's own page are stale now.
   revalidatePath("/");
@@ -107,7 +144,7 @@ export async function importFromUrl(formData: FormData) {
     }
   }
 
-  // redirect() throws internally, so it must run outside any try/catch —
-  // catching it here would swallow the redirect instead of performing it.
+  // redirect() throws internally, so it must run outside any try/catch.
+  // Catching it here would swallow the redirect instead of performing it.
   redirect(`/recipes/new?${params.toString()}`);
 }

@@ -69,6 +69,20 @@ export default async function RecipePage({
         </a>
       )}
 
+      {recipe.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {recipe.tags.map((tag) => (
+            <Link
+              key={tag}
+              href={`/?tag=${encodeURIComponent(tag)}`}
+              className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-600 hover:bg-gray-200"
+            >
+              {tag}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {recipe.ingredients && (
         <section className="mt-8">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">

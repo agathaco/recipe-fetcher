@@ -117,6 +117,16 @@ export default async function NewRecipePage({
           />
         </label>
 
+        <label className="block">
+          <span className="text-sm font-medium">Tags</span>
+          <input
+            name="tags"
+            placeholder="dessert, quick, vegetarian"
+            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <span className="mt-1 block text-xs text-gray-500">Comma-separated</span>
+        </label>
+
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="wantToMake" />
           Want to make

@@ -59,6 +59,7 @@ the server/client boundary, and the caching model.
 | `app/lib/actions.ts` | `createRecipe`, `updateRecipe`, `deleteRecipe` | Server Actions (`"use server"`), `.bind()`, `revalidatePath`, `redirect` |
 | `app/lib/data.ts` | `getRecipeById` | plain server-side read helper, shared by detail and edit pages |
 | `app/lib/capture.ts` | `captureFromWebUrl`, `captureFromInstagramUrl` | server-side `fetch` of a third-party page/API, never runs in the browser |
+| `app/lib/data.ts` | `getRecipes`, `getAllTagNames` | manual join + group-in-JS for the filterable list; Drizzle's relational `with` for the single-recipe read |
 | `app/globals.css` | Tailwind entry | (not Next specific) |
 | `db/index.ts` | Drizzle client | server-only module, imported by Server Components/Actions |
 | `db/schema.ts` | Table definitions | (Drizzle, not Next) |
@@ -127,3 +128,6 @@ routes (`/recipes/new` right now) are served as prebuilt HTML from the CDN.
 | 7 | `searchParams` page prop | `app/recipes/new/page.tsx` | reads query params as pre-fill data, a Promise like `params` |
 | 7 | Server-side `fetch` of a third party | `app/lib/capture.ts` | runs only on the server; the site being scraped never sees the user's browser, and no API key or fetch logic reaches the client bundle |
 | 7 | Mutation-that-redirects-with-data | `importFromUrl` in `app/lib/actions.ts` | a Server Action that does no DB write, just carries results forward via a redirect's query string instead of persisting a draft |
+| 8 | `searchParams` as filter/search state | `app/page.tsx` | `?tag=` and `?q=` read directly from the URL, no client state at all |
+| 8 | Plain GET `<form>` | `app/page.tsx` search box | no `action`, no JS: the browser itself turns a submit into a navigation to `/?q=...` |
+| 8 | `<Link>` as the filter UI | `app/page.tsx`, `app/recipes/[id]/page.tsx` | tag pills are just links to `/?tag=x`; clicking one is a normal navigation, not a click handler |
