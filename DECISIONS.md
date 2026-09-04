@@ -41,11 +41,39 @@ in my own words. Checked means the entry is written.
 
 - [ ] Querying the DB directly in a Server Component vs building an API route (days 3-4)
 - [ ] Server Action vs Route Handler for mutations (days 5-6)
-- [ ] revalidatePath and the caching model: when a page is cached and what busts it (days 5-6)
+- [x] revalidatePath and the caching model: when a page is cached and what busts it (days 5-6)
 - [ ] Data model shape: `ingredients` and `steps` as freeform text, not normalised tables;
       the `recipe_tag` many-to-many (already in the schema)
 - [ ] `searchParams` in the URL as filter and search state, not React state (day 8)
 - [ ] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
+
+---
+
+## force-dynamic over the cached-plus-revalidate model
+
+**Date:** 04/09/2026
+
+**Context:** Recipe pages read from Postgres via Drizzle, not `fetch`, so Next's automatic
+caching heuristics don't see them. Without telling Next what to do, a page could get
+rendered once and frozen, never showing new recipes.
+
+**Options I considered:**
+- `force-dynamic` on every dynamic route: always re-render fresh from the DB, no caching
+- Default caching + `revalidatePath` after every mutation: pages cached until explicitly
+  busted, faster for readers, but I have to remember to revalidate everywhere data changes
+
+**Chose:** `force-dynamic` everywhere for now.
+
+**Why:** it's simple and impossible to get wrong: every request is fresh, always. The
+cache-plus-revalidate model is faster but depends on me correctly revalidating every path
+touched by every mutation, and I don't understand Next's caching layers well enough yet to
+trust myself not to leave a stale page somewhere.
+
+**What I'd revisit this under:** once I've built more of the app (tags, filters) and have a
+solid feel for which pages need to update when, or if the DB query load becomes a real cost.
+
+**Confidence:** still fuzzy on the caching layers themselves. High confidence that choosing
+the safe default here, given that, was the right call.
 
 ---
 
@@ -120,8 +148,6 @@ migration workflow enough to switch.
 
 **Confidence:** medium. High on the learning rationale, less sure on the serverless-perf
 claims (the engine-binary cost is mostly historical now). Revisit after day 5-6.
-
-Reword and drop it in above the Postgres entry, check the box in the tracking list, commit both.
 
 <!-- TEMPLATE below: copy it for each new entry. New entries go directly under the
      "Decisions to document" list, newest first. -->
