@@ -1,8 +1,13 @@
 # recipe-fetcher
 
 Capture, store, and find recipes so "I feel like baking" starts with a list instead of
-scrolling Instagram saves. Side project 1 of the full-stack track. See [SPEC.md](./SPEC.md)
-for scope and [DECISIONS.md](./DECISIONS.md) for the choices log.
+scrolling Instagram saves. Side project 1 of the full-stack track.
+
+## Docs
+
+- [SPEC.md](./SPEC.md): scope and the day-by-day plan
+- [DECISIONS.md](./DECISIONS.md): choices made in this project and why
+- [WALKTHROUGH.md](./WALKTHROUGH.md): plain-English log of every setup step and tool
 
 ## Stack
 
