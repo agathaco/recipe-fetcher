@@ -30,9 +30,9 @@ in my own words. Checked means the entry is written.
       styled-components, Panda CSS.
 - [ ] **Auth: shared password checked in middleware.** Alternatives: Auth.js, Clerk, Lucia,
       Supabase Auth.
-- [ ] **URL capture: native fetch plus JSON-LD parsing** (cheerio if needed). Alternatives:
+- [x] **URL capture: native fetch plus JSON-LD parsing** (cheerio if needed). Alternatives:
       a scraping service, a headless browser, a paid recipe API.
-- [ ] **Instagram capture: oEmbed endpoint.** Alternatives: Graph API, scraping, manual
+- [x] **Instagram capture: oEmbed endpoint.** Alternatives: Graph API, scraping, manual
       paste only.
 - [ ] **LLM field pre-fill** (stretch, cuttable): Vercel AI SDK, one call. Alternatives:
       direct Anthropic SDK, or skip entirely.
@@ -46,6 +46,56 @@ in my own words. Checked means the entry is written.
       the `recipe_tag` many-to-many (already in the schema)
 - [ ] `searchParams` in the URL as filter and search state, not React state (day 8)
 - [ ] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
+
+---
+
+## Recipe capture: server-side fetch, JSON-LD, oEmbed, and a fallback ladder
+
+**Date:** 04/09/2026
+
+**Context:** Adding a recipe by pasting a URL instead of typing everything by hand. Two
+sources with different shapes: recipe websites and Instagram. Neither reliably has clean
+data, so the design question was really "what happens when this fails," not just "how do I
+fetch it."
+
+**Options I considered:**
+_Where the fetch happens:_
+- Client-side `fetch` from the browser: blocked by CORS on most sites, exposes the scraping
+  logic, can't set a custom User-Agent
+- Server-side `fetch` inside a Server Action: no CORS, logic and any keys stay off the client
+
+_Getting structured data from a web recipe:_
+- A paid recipe API (Spoonacular etc.): reliable, costs money, another account to manage
+- A headless browser (Puppeteer): handles JS-rendered pages, heavy for this app's needs
+- Parse the page's own `Recipe` JSON-LD: free, works because most recipe sites publish it
+  for Google's own rich-results feature, no dependency needed beyond a regex
+
+_Getting anything from Instagram:_
+- Graph API with an approved app + access token: real setup for a personal project
+- Scraping the page HTML directly: fragile, likely against Instagram's terms
+- The public oEmbed endpoint: simplest, though known to be restricted for many accounts
+- Manual paste only: the safety net regardless of which of the above I try first
+
+**Chose:** server-side fetch for both, JSON-LD parsing for web recipes, oEmbed for
+Instagram, and every path falls back to an empty form the user fills in by hand.
+
+**Why:** parsing has to run on the server because of CORS and because I don't want scraping
+logic or any future API keys in the client bundle. JSON-LD needed no new dependency, a plain
+regex over `<script type="application/ld+json">` tags was enough, cheerio would only earn
+its place if I needed to read the visible DOM instead of an embedded script tag. Both
+sources are unreliable in practice, not in theory: a real site I tested against had an
+unquoted `type=application/ld+json` attribute my first regex missed, and Instagram's oEmbed
+is documented to fail for many URLs without an approved app. Building the fallback in from
+the start, rather than assuming success, is why the feature works at all: every failure just
+means an empty form and a message, never a crash.
+
+**What I'd revisit this under:** if capture success rate on real sites turns out too low to
+be useful, worth trying cheerio for sites without JSON-LD. If Instagram import matters more
+than "occasionally works," that is when a Graph API app becomes worth the setup.
+
+**Confidence:** high on why this runs server-side and why the fallback ladder matters, that
+part I saw fail and recover myself. Lower on how robust the regex-based JSON-LD parser is
+across the wider variety of real sites, only tested against a couple so far.
 
 ---
 
