@@ -111,6 +111,7 @@ routes (`/recipes/new` right now) are served as prebuilt HTML from the CDN.
 | 1-2 | App Router project | whole `app/` dir | file-based routing, `create-next-app` |
 | 1-2 | Root layout | `app/layout.tsx` | the shared `<html>`/`<body>` shell |
 | 1-2 | `metadata` export | `app/layout.tsx` | static `<title>` and `<meta>` |
+| 5-6 | `title.template` | `app/layout.tsx` | child pages set just their own title; the layout wraps it, e.g. "Add a recipe · Recipes" |
 | 3 | Server Component data fetching | `app/page.tsx` | `async` component queries the DB on the server, no `/api` route |
 | 3 | Route segment config | `app/page.tsx` | `export const dynamic = "force-dynamic"` |
 | 3 | Dynamic route | `app/recipes/[id]/` | `[id]` segment, `params` is a Promise |
