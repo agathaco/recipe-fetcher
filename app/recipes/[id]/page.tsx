@@ -1,26 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
 
-import { db } from "@/db";
-import { recipes } from "@/db/schema";
+import { deleteRecipe } from "@/app/lib/actions";
+import { getRecipeById } from "@/app/lib/data";
 
 export const dynamic = "force-dynamic";
 
 // A dynamic route: [id] is a URL segment. `params` is a Promise in Next 15+.
-async function getRecipe(id: string) {
-  // The id column is a uuid. A malformed id makes Postgres throw, so treat
-  // that the same as "not found" rather than crashing the page.
-  try {
-    const [recipe] = await db
-      .select()
-      .from(recipes)
-      .where(eq(recipes.id, id));
-    return recipe ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export async function generateMetadata({
   params,
@@ -28,7 +14,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const recipe = await getRecipe(id);
+  const recipe = await getRecipeById(id);
   return { title: recipe ? recipe.title : "Recipe not found" };
 }
 
@@ -38,8 +24,12 @@ export default async function RecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const recipe = await getRecipe(id);
+  const recipe = await getRecipeById(id);
   if (!recipe) notFound();
+
+  // Bound in this Server Component so the rendered form already knows which
+  // recipe to delete, with no hidden "id" input needed.
+  const deleteThisRecipe = deleteRecipe.bind(null, recipe.id);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -47,13 +37,25 @@ export default async function RecipePage({
         &larr; All recipes
       </Link>
 
-      <div className="mt-4 flex items-baseline gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{recipe.title}</h1>
-        {recipe.wantToMake && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
-            want to make
-          </span>
-        )}
+      <div className="mt-4 flex items-baseline justify-between gap-2">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight">{recipe.title}</h1>
+          {recipe.wantToMake && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
+              want to make
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-3 text-sm">
+          <Link href={`/recipes/${recipe.id}/edit`} className="text-blue-600 hover:underline">
+            Edit
+          </Link>
+          <form action={deleteThisRecipe}>
+            <button type="submit" className="text-red-600 hover:underline">
+              Delete
+            </button>
+          </form>
+        </div>
       </div>
 
       {recipe.sourceUrl && (

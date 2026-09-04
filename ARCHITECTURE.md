@@ -55,7 +55,9 @@ the server/client boundary, and the caching model.
 | `app/page.tsx` | Recipe list at `/` | Server Component, direct DB query, `dynamic` |
 | `app/recipes/[id]/page.tsx` | One recipe at `/recipes/:id` | Dynamic route, `await params`, `generateMetadata`, `notFound()` |
 | `app/recipes/new/page.tsx` | Add form at `/recipes/new` | Server Component form, `<form action={}>` |
-| `app/lib/actions.ts` | `createRecipe` mutation | Server Action (`"use server"`), `revalidatePath`, `redirect` |
+| `app/recipes/[id]/edit/page.tsx` | Edit form at `/recipes/:id/edit` | pre-filled form, `updateRecipe.bind(null, id)` |
+| `app/lib/actions.ts` | `createRecipe`, `updateRecipe`, `deleteRecipe` | Server Actions (`"use server"`), `.bind()`, `revalidatePath`, `redirect` |
+| `app/lib/data.ts` | `getRecipeById` | plain server-side read helper, shared by detail and edit pages |
 | `app/globals.css` | Tailwind entry | (not Next specific) |
 | `db/index.ts` | Drizzle client | server-only module, imported by Server Components/Actions |
 | `db/schema.ts` | Table definitions | (Drizzle, not Next) |
@@ -70,6 +72,10 @@ Nothing in this app is a Client Component yet. Everything runs on the server. Th
 - There is no `useState`, `useEffect`, or `onClick` anywhere yet.
 - The first `"use client"` component will be the "want to make" toggle (day 9), because it
   needs optimistic UI. That is the one place interactivity is worth the client JS.
+- The delete button has no "are you sure?" confirmation on purpose: a `confirm()` dialog
+  needs an `onClick`, which needs a Client Component. Adding one now would mean a second
+  client component before day 9, ahead of the SPEC's plan. Revisit once the want-to-make
+  toggle establishes the client boundary pattern.
 
 ## What runs where
 
@@ -115,3 +121,4 @@ routes (`/recipes/new` right now) are served as prebuilt HTML from the CDN.
 | 5-6 | `<form action={fn}>` | `app/recipes/new/page.tsx` | form wired to a Server Action, works without JS |
 | 5-6 | `revalidatePath` | `app/lib/actions.ts` | mark a cached route stale after a write |
 | 5-6 | `redirect` | `app/lib/actions.ts` | navigate after a mutation |
+| 5-6 | Bound Server Action | `updateRecipe`/`deleteRecipe` in `app/lib/actions.ts` | `action.bind(null, id)` passes an id into a Server Action invoked from a form, with no hidden `id` input needed |

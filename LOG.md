@@ -33,4 +33,12 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
 - `app/recipes/new/page.tsx`: plain `<form action={createRecipe}>` in a Server Component.
   Works with JS disabled. `+ Add recipe` link on the list.
 - **Taught:** Server Actions, forms without an API route or client JS, `revalidatePath`.
-- Next: edit and delete, then the caching model in depth.
+- `updateRecipe` and `deleteRecipe` added to `app/lib/actions.ts`. Both invoked from forms via
+  `.bind(null, id)`, so the recipe id travels with the action instead of a hidden input.
+  `app/recipes/[id]/edit/page.tsx`: pre-filled form. Detail page got Edit/Delete controls.
+  Read logic pulled out to `app/lib/data.ts` (`getRecipeById`), shared by detail and edit.
+- Delete has no confirm dialog yet: that needs a Client Component, deliberately deferred to
+  day 9 alongside the want-to-make toggle.
+- **Taught:** passing extra arguments to a Server Action, splitting read helpers from write
+  actions.
+- Next: the caching model in depth (the DECISIONS entry), then day 7 URL capture.
