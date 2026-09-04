@@ -7,6 +7,7 @@ scrolling Instagram saves. Side project 1 of the full-stack track.
 
 - [SPEC.md](./SPEC.md): scope and the day-by-day plan
 - [DECISIONS.md](./DECISIONS.md): choices made in this project and why
+- [ARCHITECTURE.md](./ARCHITECTURE.md): how it fits together, what Next.js is doing
 - [LOG.md](./LOG.md): thin per-day record of what was built
 - [WALKTHROUGH.md](./WALKTHROUGH.md): plain-English log of every setup step and tool
 
