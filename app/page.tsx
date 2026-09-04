@@ -18,7 +18,15 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="text-2xl font-semibold tracking-tight">Recipes</h1>
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">Recipes</h1>
+        <Link
+          href="/recipes/new"
+          className="text-sm font-medium text-blue-600 hover:underline"
+        >
+          + Add recipe
+        </Link>
+      </div>
 
       {allRecipes.length === 0 ? (
         <p className="mt-6 text-sm text-gray-500">
