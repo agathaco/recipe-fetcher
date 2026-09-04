@@ -60,6 +60,7 @@ the server/client boundary, and the caching model.
 | `app/lib/data.ts` | `getRecipeById` | plain server-side read helper, shared by detail and edit pages |
 | `app/lib/capture.ts` | `captureFromWebUrl`, `captureFromInstagramUrl` | server-side `fetch` of a third-party page/API, never runs in the browser |
 | `app/lib/data.ts` | `getRecipes`, `getAllTagNames` | manual join + group-in-JS for the filterable list; Drizzle's relational `with` for the single-recipe read |
+| `app/components/want-to-make-toggle.tsx` | the toggle button | the only `"use client"` file in the app |
 | `app/globals.css` | Tailwind entry | (not Next specific) |
 | `db/index.ts` | Drizzle client | server-only module, imported by Server Components/Actions |
 | `db/schema.ts` | Table definitions | (Drizzle, not Next) |
@@ -72,8 +73,9 @@ Nothing in this app is a Client Component yet. Everything runs on the server. Th
 - The database client, the connection string, and all query logic stay server-side and never
   reach the browser bundle.
 - There is no `useState`, `useEffect`, or `onClick` anywhere yet.
-- The first `"use client"` component will be the "want to make" toggle (day 9), because it
-  needs optimistic UI. That is the one place interactivity is worth the client JS.
+- The one `"use client"` component is the "want to make" toggle
+  (`app/components/want-to-make-toggle.tsx`), because it needs optimistic UI. Everything
+  else stays a Server Component; this is the one place interactivity was worth the client JS.
 - The delete button has no "are you sure?" confirmation on purpose: a `confirm()` dialog
   needs an `onClick`, which needs a Client Component. Adding one now would mean a second
   client component before day 9, ahead of the SPEC's plan. Revisit once the want-to-make
@@ -88,7 +90,7 @@ Nothing in this app is a Client Component yet. Everything runs on the server. Th
 | Writing data | Server | Server Action called from a form |
 | HTML generation | Server | RSC render |
 | Navigation between pages | Client | Next's `<Link>` does client-side transitions |
-| Interactivity | Client | none yet; `"use client"` when needed |
+| Interactivity | Client | the want-to-make toggle only; `"use client"` |
 
 ## Caching (evolving, day 5-6)
 
@@ -131,3 +133,6 @@ routes (`/recipes/new` right now) are served as prebuilt HTML from the CDN.
 | 8 | `searchParams` as filter/search state | `app/page.tsx` | `?tag=` and `?q=` read directly from the URL, no client state at all |
 | 8 | Plain GET `<form>` | `app/page.tsx` search box | no `action`, no JS: the browser itself turns a submit into a navigation to `/?q=...` |
 | 8 | `<Link>` as the filter UI | `app/page.tsx`, `app/recipes/[id]/page.tsx` | tag pills are just links to `/?tag=x`; clicking one is a normal navigation, not a click handler |
+| 9 | `"use client"` | `app/components/want-to-make-toggle.tsx` | the app's first and only client-rendered component; ships JS, can use hooks and event handlers |
+| 9 | `useOptimistic` + `useTransition` | same file | flips the button on the current frame, before the Server Action's network round trip resolves; reverts to the real value once `revalidatePath` produces a fresh server render |
+| 9 | Server Action called directly (no `<form>`) | `toggleWantToMake` invoked from `onClick` | a Server Action isn't only for forms; a Client Component can call one like any async function, as long as it's wrapped in a transition |

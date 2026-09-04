@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
 import { getAllTagNames, getRecipes } from "@/app/lib/data";
 
 // Always render on request so new recipes show up immediately.
@@ -110,11 +111,7 @@ export default async function HomePage({
                 >
                   {recipe.title}
                 </Link>
-                {recipe.wantToMake && (
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
-                    want to make
-                  </span>
-                )}
+                <WantToMakeToggle recipeId={recipe.id} initialValue={recipe.wantToMake} />
               </div>
               {recipe.ingredients && (
                 <p className="mt-1 line-clamp-1 text-sm text-gray-500">

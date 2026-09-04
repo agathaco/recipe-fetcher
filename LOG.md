@@ -85,3 +85,21 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
 - **Taught:** the URL as the single source of truth for filter/search state, a plain HTML
   GET form as a zero-JS search box, when to reach for a manual join+group instead of the
   ORM's relational `with`.
+
+## Day 9: the want-to-make toggle (first Client Component)
+
+- `toggleWantToMake(id, next)` added to `app/lib/actions.ts`: updates the DB, calls
+  `revalidatePath` on both affected routes, no `redirect`, since the user stays put.
+- `app/components/want-to-make-toggle.tsx`: the app's one `"use client"` file.
+  `useOptimistic` seeded from the server-rendered value, `useTransition` to run the Server
+  Action as a transition, called directly from `onClick`, not through a `<form>`. Pattern
+  copied from the current Next.js docs (`interactive-apps.md`), not improvised.
+- Reused on both the list page (one instance per row) and the detail page, replacing the
+  static "want to make" badge in both places.
+- Verified: production build clean, SSR output correct (right initial state, right styling,
+  `aria-pressed` matching the DB) on both pages. The actual click-to-optimistic-update round
+  trip needs a real browser to exercise (direct Server Action calls use React's Flight wire
+  protocol, not practical to hand-craft with curl the way the form-based actions were), so
+  that part is manually verified rather than scripted.
+- **Taught:** the one legitimate reason to leave the server-only model: needing instant
+  feedback before a round trip resolves. Everything else in the app stays a Server Component.

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
 import { deleteRecipe } from "@/app/lib/actions";
 import { getRecipeById } from "@/app/lib/data";
 
@@ -40,11 +41,7 @@ export default async function RecipePage({
       <div className="mt-4 flex items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">{recipe.title}</h1>
-          {recipe.wantToMake && (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
-              want to make
-            </span>
-          )}
+          <WantToMakeToggle recipeId={recipe.id} initialValue={recipe.wantToMake} />
         </div>
         <div className="flex shrink-0 items-center gap-3 text-sm">
           <Link href={`/recipes/${recipe.id}/edit`} className="text-blue-600 hover:underline">

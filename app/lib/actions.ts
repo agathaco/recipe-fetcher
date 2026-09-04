@@ -118,6 +118,15 @@ export async function deleteRecipe(id: string) {
   redirect("/");
 }
 
+// Called directly from a Client Component's onClick, not from a <form>. No
+// redirect: the user stays exactly where they are, so this only revalidates.
+export async function toggleWantToMake(id: string, next: boolean) {
+  await db.update(recipes).set({ wantToMake: next }).where(eq(recipes.id, id));
+
+  revalidatePath("/");
+  revalidatePath(`/recipes/${id}`);
+}
+
 // The "paste a URL" mini-form on the add-recipe page. This never writes to
 // the database itself: it fetches, tries to extract a recipe, and hands
 // whatever it found to the real add-recipe form via the URL, as searchParams.
