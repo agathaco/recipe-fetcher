@@ -45,7 +45,42 @@ in my own words. Checked means the entry is written.
 - [ ] Data model shape: `ingredients` and `steps` as freeform text, not normalised tables;
       the `recipe_tag` many-to-many (already in the schema)
 - [x] `searchParams` in the URL as filter and search state, not React state (day 8)
-- [ ] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
+- [x] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
+
+---
+
+## Want-to-make toggle: the one Client Component
+
+**Date:** 05/09/2026
+
+**Context:** Every other mutation in the app (add, edit, delete, tags) is a full page
+navigation or an explicit save, so a Server Component and a brief round trip are fine. The
+want-to-make toggle is a repeated micro-interaction, closer to a light switch than a form
+submit, and needed to decide if that changes anything.
+
+**Options I considered:**
+- A form + Server Action like the rest of the app: click, wait for the round trip, the whole
+  page re-renders with the new state
+- A Client Component with `useOptimistic` and `useTransition`: flips the UI on the same
+  frame the click happens, reconciles with the real value once the server responds
+
+**Chose:** the Client Component.
+
+**Why:** the test I used was "is there a per-click delay here a user would notice and
+dislike." Everywhere else in the app fails that test: adding or editing a recipe is a
+deliberate, occasional action where a moment's wait reads as normal, and filtering by tag is
+a navigation, not a rapid repeated click. A toggle is the opposite, it invites clicking it a
+few times in a row, and a visible lag on each click would feel broken. That gap is worth the
+cost of the one client-side file, one hook I hadn't used before, and one interaction where a
+stale-optimistic-value bug could exist that cannot happen anywhere else in this app.
+
+**What I'd revisit this under:** if another interaction needed the same instant feel, for
+example inline editing a field without a full form, I would reuse this exact pattern rather
+than invent a different one.
+
+**Confidence:** high on the reasoning for why this one and nothing else. Still building
+confidence on `useOptimistic` edge cases I have not hit yet, like rapid double-clicks or what
+the UI should do if the action actually fails.
 
 ---
 
