@@ -179,6 +179,7 @@ if unset, the gate is disabled and the app is public).
 | 1-2 | App Router project | whole `app/` dir | file-based routing, `create-next-app` |
 | 1-2 | Root layout | `app/layout.tsx` | the shared `<html>`/`<body>` shell |
 | 1-2 | `metadata` export | `app/layout.tsx` | static `<title>` and `<meta>` |
+| UI pass | `app/icon.svg` file convention | `app/icon.svg` | drop an SVG in and Next injects the favicon `<link>`, no config |
 | 3 | Server Component data fetching | `app/page.tsx` | `async` component queries the DB on the server, no `/api` route |
 | 3 | Route segment config | `app/page.tsx` | `export const dynamic = "force-dynamic"` |
 | 3 | Dynamic route | `app/recipes/[id]/` | `[id]` segment, `params` is a Promise |

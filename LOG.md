@@ -146,3 +146,5 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   only ("warm paper + terracotta" palette, warm-tinted neutrals, burnt-orange primary) plus
   Fraunces serif for headings. No component changes. DECISIONS entry updated with the
   follow-up. `.dark` tokens are set for a future toggle but nothing enables dark mode yet.
+- **Favicon:** replaced the scaffold `app/favicon.ico` with `app/icon.svg`, a whisk on a
+  terracotta square. Next's `app/icon.svg` file convention injects the `<link>` automatically.
