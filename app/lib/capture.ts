@@ -49,13 +49,28 @@ function findRecipeNode(nodes: unknown[]): Record<string, unknown> | null {
   return null;
 }
 
+// Some sites HTML-encode the text inside their JSON-LD (e.g. "Quick &amp; Easy"),
+// which is technically wrong but common. JSON.parse leaves those as literal
+// characters, so decode the handful that actually show up in recipe text.
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&(?:apos|#39);/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&"); // last, so an already-decoded "&" isn't touched twice
+}
+
 // recipeIngredient is a string array. recipeInstructions varies a lot in
 // practice: a plain string, an array of strings, or an array of HowToStep
 // objects with a "text" field. Flatten whatever shape shows up to one
 // newline-separated block, matching how ingredients/steps are stored.
 function toLines(value: unknown): string {
   if (!value) return "";
-  if (typeof value === "string") return value;
+  if (typeof value === "string") return decodeEntities(value);
   if (Array.isArray(value)) {
     return value
       .map((item) => {
@@ -67,6 +82,7 @@ function toLines(value: unknown): string {
         return "";
       })
       .filter(Boolean)
+      .map(decodeEntities)
       .join("\n");
   }
   return "";
@@ -92,10 +108,13 @@ export async function captureFromWebUrl(url: string): Promise<CapturedRecipe | n
     if (!recipe) return null;
 
     return {
-      title: typeof recipe.name === "string" ? recipe.name : undefined,
+      title: typeof recipe.name === "string" ? decodeEntities(recipe.name) : undefined,
       ingredients: toLines(recipe.recipeIngredient) || undefined,
       steps: toLines(recipe.recipeInstructions) || undefined,
-      notes: typeof recipe.description === "string" ? recipe.description : undefined,
+      notes:
+        typeof recipe.description === "string"
+          ? decodeEntities(recipe.description)
+          : undefined,
       imageUrl: firstImageUrl(recipe.image),
     };
   } catch {
