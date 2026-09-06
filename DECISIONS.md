@@ -77,9 +77,17 @@ project where the UI is not the goal.
 
 **What I'd revisit this under:** a project where the visual identity matters. shadcn's
 defaults are deliberately neutral, so a shadcn app looks like every other shadcn app until
-you invest in restyling it. For this one, generic and clean is fine.
+you invest in restyling it.
 
-**Confidence:** high. The tradeoff (generic look) is real but acceptable given the goal.
+**Follow-up (06/09/2026):** the stock zinc theme did look too generic for a recipe app, so
+I themed it: a "warm paper + terracotta" palette (neutrals carry a slight warm hue, the
+primary is a burnt orange-red) and a serif (Fraunces) for headings. This is all CSS
+variables in `globals.css` plus one font in `layout.tsx`, no component changes, which is
+exactly the point of picking a token-themed library. shadcn gave the structure, the theme
+gave the personality.
+
+**Confidence:** high. The library choice was right; the "generic is fine" line was wrong,
+and cheap to fix.
 
 ---
 

@@ -142,3 +142,7 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   `wantToMake=on` correctly through the edit form.
 - Backlog in `IDEAS.md`: AI features (auto-tag, semantic search, caption parsing), search
   debounce, dark mode, more.
+- **Theming:** stock zinc looked too generic for a recipe app. Themed it via CSS variables
+  only ("warm paper + terracotta" palette, warm-tinted neutrals, burnt-orange primary) plus
+  Fraunces serif for headings. No component changes. DECISIONS entry updated with the
+  follow-up. `.dark` tokens are set for a future toggle but nothing enables dark mode yet.

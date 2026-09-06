@@ -120,7 +120,9 @@ Three tables, deliberately flat (`db/schema.ts`):
 | `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `expectedAuthCookie` | Web-Crypto only, shared by the Edge proxy and the Node login action |
 | `app/components/want-to-make-toggle.tsx` | the toggle button | the only `"use client"` file in the app |
 | `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); redirects to `/login` without a valid cookie |
-| `app/globals.css` | Tailwind entry | (not Next specific) |
+| `app/globals.css` | Tailwind entry + shadcn theme tokens (warm palette, `--font-heading` serif) | (not Next specific) |
+| `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
+| `components/recipe-fields.tsx` | the field layout shared by the add and edit forms | plain component, no state |
 | `db/index.ts` | Drizzle client | server-only module, imported by Server Components/Actions |
 | `db/schema.ts` | Table definitions and relations | (Drizzle, not Next) |
 | `db/seed.mts` | Dev seed script | plain script, run with `tsx`, not part of the app |
