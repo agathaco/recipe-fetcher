@@ -124,3 +124,21 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   rather than the secret.
 - Deferred: the polish pass (empty states are mostly there, responsive is fine, favicon is
   still the scaffold default).
+
+## UI pass (post-day-10)
+
+- Adopted **shadcn/ui** (DECISIONS entry written): `init` + button, input, textarea, label,
+  card, badge, checkbox. This variant is built on Base UI, not Radix; `cn` comes from the
+  `cn` package, components live in `components/ui/`.
+- Rebuilt every page with it: `components/recipe-fields.tsx` shared by add + edit forms,
+  cards and proper spacing throughout, tag/toggle as badges, recipe images now shown on the
+  list and detail (`imageUrl` was stored but never rendered), steps rendered as a numbered
+  list instead of a text blob.
+- Fixed the filter-to-filter width jump (`scrollbar-gutter: stable`).
+- Fixed `&amp;` showing literally in imported titles (decode HTML entities in `capture.ts`).
+- Font: shadcn's theme maps `font-sans` to `--font-sans`, so `app/layout.tsx` now names the
+  Geist variable `--font-sans`.
+- Verified: build/lint/typecheck clean, all pages render, the Base UI checkbox still submits
+  `wantToMake=on` correctly through the edit form.
+- Backlog in `IDEAS.md`: AI features (auto-tag, semantic search, caption parsing), search
+  debounce, dark mode, more.
