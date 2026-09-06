@@ -65,6 +65,7 @@ export default async function HomePage({
           name="q"
           defaultValue={q}
           placeholder="Search titles..."
+          autoComplete="off"
           className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
         />
         <button
