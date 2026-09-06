@@ -148,3 +148,7 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   follow-up. `.dark` tokens are set for a future toggle but nothing enables dark mode yet.
 - **Favicon:** replaced the scaffold `app/favicon.ico` with `app/icon.svg`, a whisk on a
   terracotta square. Next's `app/icon.svg` file convention injects the `<link>` automatically.
+- **Live search:** `app/components/search-box.tsx`, the app's 2nd Client Component. Debounced
+  (250ms) `router.replace` on each keystroke, so the list filters live but the query stays in
+  the URL and the DB still does the filtering. Plain GET form kept as the no-JS fallback.
+  DECISIONS entry written. Spinner in the input during the transition.

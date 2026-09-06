@@ -118,7 +118,8 @@ Three tables, deliberately flat (`db/schema.ts`):
 | `app/lib/data.ts` | `getRecipeById`, `getRecipes`, `getAllTagNames` | server-side read helpers; manual join + group-in-JS for the filterable list, Drizzle's relational `with` for the single-recipe read |
 | `app/lib/capture.ts` | `captureFromWebUrl`, `captureFromInstagramUrl` | server-side `fetch` of a third-party page/API, never runs in the browser |
 | `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `expectedAuthCookie` | Web-Crypto only, shared by the Edge proxy and the Node login action |
-| `app/components/want-to-make-toggle.tsx` | the toggle button | the only `"use client"` file in the app |
+| `app/components/want-to-make-toggle.tsx` | the toggle button | `"use client"`, `useOptimistic` |
+| `app/components/search-box.tsx` | the live search input | `"use client"`, debounced `router.replace` |
 | `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); redirects to `/login` without a valid cookie |
 | `app/globals.css` | Tailwind entry + shadcn theme tokens (warm palette, `--font-heading` serif) | (not Next specific) |
 | `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
@@ -130,15 +131,18 @@ Three tables, deliberately flat (`db/schema.ts`):
 
 ## The server/client boundary
 
-Almost everything runs on the server. The one exception is the want-to-make toggle.
+Almost everything runs on the server. Two Client Components are the exceptions, and both
+earn it by the same test: a per-interaction delay a user would notice.
 
 - The database client, the connection string, and all query and mutation logic stay
   server-side and never reach the browser bundle.
-- `app/components/want-to-make-toggle.tsx` is the only `"use client"` file, and so the only
-  place with `useState`-style hooks (`useOptimistic`, `useTransition`) and an `onClick`. It
-  earns that because a toggle needs to feel instant, which requires state in the browser.
+- `app/components/want-to-make-toggle.tsx` (`useOptimistic` + `useTransition`): flips
+  instantly, before the round trip.
+- `app/components/search-box.tsx` (`useSearchParams` + `useRouter` + a debounce): filters
+  live on each keystroke. It still writes the query to the URL and the server still does the
+  filtering, so it is a thin client shell over the same URL-as-state model.
 - The delete button has no "are you sure?" confirmation on purpose: a `confirm()` dialog
-  would need a second Client Component for a marginal gain. Left as a plain form-button.
+  would need another Client Component for a marginal gain. Left as a plain form-button.
 
 ## What runs where
 
@@ -201,6 +205,7 @@ if unset, the gate is disabled and the app is public).
 | 9 | `"use client"` | `app/components/want-to-make-toggle.tsx` | the app's first and only client-rendered component; ships JS, can use hooks and event handlers |
 | 9 | `useOptimistic` + `useTransition` | same file | flips the button on the current frame, before the Server Action's network round trip resolves; reverts to the real value once `revalidatePath` produces a fresh server render |
 | 9 | Server Action called directly (no `<form>`) | `toggleWantToMake` invoked from `onClick` | a Server Action isn't only for forms; a Client Component can call one like any async function, as long as it's wrapped in a transition |
+| UI pass | `useSearchParams` + `useRouter().replace` | `app/components/search-box.tsx` | a Client Component reads and writes the URL query string; `replace` keeps keystrokes out of history, `{ scroll: false }` stops the page jumping |
 | 10 | `proxy.ts` (was `middleware.ts` pre-16) | project root | one file, runs before every matched request; `export function proxy` + a `config.matcher` regex |
 | 10 | Edge runtime constraints | `proxy.ts` + `app/lib/auth.ts` | proxy code can't use Node APIs, so the shared auth helper uses only Web Crypto |
 | 10 | `cookies()` from `next/headers` | `login` / `logout` in `app/lib/actions.ts` | read and set cookies inside a Server Action; setting one re-renders the current route |

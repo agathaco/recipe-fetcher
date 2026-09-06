@@ -1,10 +1,10 @@
 import { Plus } from "lucide-react";
 import Link from "next/link";
 
+import { SearchBox } from "@/app/components/search-box";
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
 import { badgeVariants } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { logout } from "@/app/lib/actions";
 import { getAllTagNames, getRecipes } from "@/app/lib/data";
 
@@ -55,20 +55,14 @@ export default async function HomePage({
         </div>
       </header>
 
-      {/* Plain GET form. The browser turns a submit into a navigation to
-          /?q=..., so the URL is the search state and there's nothing to wire. */}
-      <form method="get" className="mt-5 flex gap-2">
+      {/* The GET form is the no-JS fallback (Enter still navigates to /?q=...).
+          With JS, SearchBox updates the URL live on each debounced keystroke. */}
+      <form method="get" className="mt-5">
         {tag && <input type="hidden" name="tag" value={tag} />}
-        <Input
-          type="search"
-          name="q"
-          defaultValue={q}
-          placeholder="Search titles..."
-          autoComplete="off"
-        />
-        <Button type="submit" variant="secondary">
+        <SearchBox />
+        <button type="submit" className="sr-only">
           Search
-        </Button>
+        </button>
       </form>
 
       {allTags.length > 0 && (

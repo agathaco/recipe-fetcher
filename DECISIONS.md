@@ -51,6 +51,38 @@ in my own words. Checked means the entry is written.
 
 ---
 
+## Live debounced search, still URL-backed
+
+**Date:** 06/09/2026
+
+**Context:** The search box was a plain GET form: type, press Enter, navigate. I wanted it to
+filter live on each keystroke instead. The earlier "URL as filter state" entry predicted
+this and said the URL should stay in sync rather than be dropped.
+
+**Options I considered:**
+- Keep the GET form (no client JS, but no live results)
+- Client component holding the query in `useState`, filtering the list in the browser
+- Client component that updates the URL (`router.replace`) on a debounced keystroke, server
+  re-renders the filtered list
+
+**Chose:** the third: a debounced client component that writes to the URL.
+
+**Why:** live typing needs browser state, so this is the app's second `"use client"`
+component, and it passes the same test the want-to-make toggle did (a per-interaction delay
+a user would notice). But the filtering itself stays on the server against the database, and
+the query stays in the URL, so a search is still shareable and the back button still works.
+`router.replace` rather than `push` so a burst of keystrokes doesn't flood browser history.
+A 250ms debounce so it's not a request per character. The plain GET form is kept as the
+no-JS fallback (Enter still works).
+
+**What I'd revisit this under:** the recipe list getting large enough that a server round
+trip per debounced keystroke feels slow, at which point client-side filtering of an
+already-loaded list, or an index like the semantic search idea, becomes worth it.
+
+**Confidence:** high.
+
+---
+
 ## shadcn/ui for components
 
 **Date:** 06/09/2026
