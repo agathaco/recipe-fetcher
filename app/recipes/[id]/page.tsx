@@ -1,13 +1,14 @@
+import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
+import { badgeVariants } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { deleteRecipe } from "@/app/lib/actions";
 import { getRecipeById } from "@/app/lib/data";
 
 export const dynamic = "force-dynamic";
-
-// A dynamic route: [id] is a URL segment. `params` is a Promise in Next 15+.
 
 export async function generateMetadata({
   params,
@@ -19,6 +20,10 @@ export async function generateMetadata({
   return { title: recipe ? recipe.title : "Recipe not found" };
 }
 
+function lines(text: string): string[] {
+  return text.split("\n").map((l) => l.trim()).filter(Boolean);
+}
+
 export default async function RecipePage({
   params,
 }: {
@@ -28,31 +33,56 @@ export default async function RecipePage({
   const recipe = await getRecipeById(id);
   if (!recipe) notFound();
 
-  // Bound in this Server Component so the rendered form already knows which
-  // recipe to delete, with no hidden "id" input needed.
   const deleteThisRecipe = deleteRecipe.bind(null, recipe.id);
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <Link href="/" className="text-sm text-gray-500 hover:underline">
-        &larr; All recipes
+    <main className="mx-auto w-full max-w-2xl px-4 py-10">
+      <Link
+        href="/"
+        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
+      >
+        <ArrowLeft className="size-4" />
+        All recipes
       </Link>
 
-      <div className="mt-4 flex items-baseline justify-between gap-2">
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{recipe.title}</h1>
-          <WantToMakeToggle recipeId={recipe.id} initialValue={recipe.wantToMake} />
-        </div>
-        <div className="flex shrink-0 items-center gap-3 text-sm">
-          <Link href={`/recipes/${recipe.id}/edit`} className="text-blue-600 hover:underline">
+      {recipe.imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- external, not worth optimizing
+        <img
+          src={recipe.imageUrl}
+          alt=""
+          className="mt-4 max-h-72 w-full rounded-lg object-cover"
+        />
+      )}
+
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">{recipe.title}</h1>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={`/recipes/${recipe.id}/edit`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <Pencil />
             Edit
           </Link>
           <form action={deleteThisRecipe}>
-            <button type="submit" className="text-red-600 hover:underline">
+            <Button type="submit" variant="destructive" size="sm">
               Delete
-            </button>
+            </Button>
           </form>
         </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <WantToMakeToggle recipeId={recipe.id} initialValue={recipe.wantToMake} />
+        {recipe.tags.map((tag) => (
+          <Link
+            key={tag}
+            href={`/?tag=${encodeURIComponent(tag)}`}
+            className={badgeVariants({ variant: "secondary" })}
+          >
+            {tag}
+          </Link>
+        ))}
       </div>
 
       {recipe.sourceUrl && (
@@ -60,57 +90,47 @@ export default async function RecipePage({
           href={recipe.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-1 inline-block text-sm text-blue-600 hover:underline"
+          className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-sm"
         >
+          <ExternalLink className="size-3.5" />
           {recipe.sourceType ? `Source (${recipe.sourceType})` : "Source"}
         </a>
       )}
 
-      {recipe.tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {recipe.tags.map((tag) => (
-            <Link
-              key={tag}
-              href={`/?tag=${encodeURIComponent(tag)}`}
-              className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-600 hover:bg-gray-200"
-            >
-              {tag}
-            </Link>
-          ))}
-        </div>
-      )}
-
       {recipe.ingredients && (
         <section className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
             Ingredients
           </h2>
-          <ul className="mt-2 list-disc pl-5 text-sm">
-            {recipe.ingredients
-              .split("\n")
-              .filter(Boolean)
-              .map((line, i) => (
-                <li key={i}>{line}</li>
-              ))}
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+            {lines(recipe.ingredients).map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
           </ul>
         </section>
       )}
 
       {recipe.steps && (
         <section className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
             Steps
           </h2>
-          <p className="mt-2 whitespace-pre-line text-sm">{recipe.steps}</p>
+          <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm">
+            {lines(recipe.steps).map((line, i) => (
+              <li key={i} className="pl-1">
+                {line}
+              </li>
+            ))}
+          </ol>
         </section>
       )}
 
       {recipe.notes && (
         <section className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
             Notes
           </h2>
-          <p className="mt-2 whitespace-pre-line text-sm">{recipe.notes}</p>
+          <p className="mt-2 text-sm whitespace-pre-line">{recipe.notes}</p>
         </section>
       )}
     </main>

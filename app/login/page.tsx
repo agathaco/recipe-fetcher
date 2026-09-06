@@ -1,3 +1,7 @@
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { login } from "@/app/lib/actions";
 
 export const metadata = { title: "Sign in" };
@@ -11,28 +15,31 @@ export default async function LoginPage({
   const { error, from } = await searchParams;
 
   return (
-    <main className="mx-auto max-w-sm px-4 py-24">
-      <h1 className="text-xl font-semibold tracking-tight">recipe-fetcher</h1>
-      <p className="mt-1 text-sm text-gray-500">Enter the password to continue.</p>
-
-      <form action={login} className="mt-6 space-y-3">
-        <input type="hidden" name="from" value={from ?? "/"} />
-        <input
-          type="password"
-          name="password"
-          required
-          autoFocus
-          placeholder="Password"
-          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-        />
-        <button
-          type="submit"
-          className="w-full rounded bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-        >
-          Sign in
-        </button>
-        {error && <p className="text-sm text-red-600">Wrong password.</p>}
-      </form>
+    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-4 py-12">
+      <Card className="[--card-spacing:--spacing(6)]">
+        <CardHeader>
+          <CardTitle>recipe-fetcher</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={login} className="space-y-4">
+            <input type="hidden" name="from" value={from ?? "/"} />
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                name="password"
+                required
+                autoFocus
+              />
+            </div>
+            {error && <p className="text-destructive text-sm">Wrong password.</p>}
+            <Button type="submit" className="w-full">
+              Sign in
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </main>
   );
 }

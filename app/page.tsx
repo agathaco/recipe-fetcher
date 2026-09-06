@@ -1,19 +1,21 @@
+import { Plus } from "lucide-react";
 import Link from "next/link";
 
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
+import { badgeVariants } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { logout } from "@/app/lib/actions";
 import { getAllTagNames, getRecipes } from "@/app/lib/data";
 
-// Always render on request so new recipes show up immediately.
-// The proper caching model (revalidatePath etc.) is days 5-6.
 export const dynamic = "force-dynamic";
 
 function field(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-// Builds an href that keeps the other active filter alive, e.g. clicking a
-// tag while a search is active keeps the search term in the URL too.
+// Builds an href that keeps the other active filter alive, e.g. clicking a tag
+// while a search is active keeps the search term in the URL too.
 function filterHref(tag: string | undefined, q: string | undefined): string {
   const params = new URLSearchParams();
   if (tag) params.set("tag", tag);
@@ -25,9 +27,6 @@ function filterHref(tag: string | undefined, q: string | undefined): string {
 export default async function HomePage({
   searchParams,
 }: {
-  // searchParams is a page prop, just like params, and is also a Promise.
-  // Next.js: this is what makes reading the URL's query string a first-class
-  // Server Component concern, no client-side router hook needed.
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
@@ -40,47 +39,43 @@ export default async function HomePage({
   ]);
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="flex items-baseline justify-between gap-3">
+    <main className="mx-auto w-full max-w-2xl px-4 py-10">
+      <header className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Recipes</h1>
-        <div className="flex shrink-0 items-baseline gap-3 text-sm">
-          <Link href="/recipes/new" className="font-medium text-blue-600 hover:underline">
-            + Add recipe
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href="/recipes/new" className={buttonVariants({ size: "sm" })}>
+            <Plus />
+            Add recipe
           </Link>
           <form action={logout}>
-            <button type="submit" className="text-gray-400 hover:text-gray-600 hover:underline">
+            <Button type="submit" variant="ghost" size="sm" className="text-muted-foreground">
               Sign out
-            </button>
+            </Button>
           </form>
         </div>
-      </div>
+      </header>
 
-      {/* A plain GET form. No onSubmit, no state, no "use client": the browser
-          itself turns this into a navigation to /?q=whatever-was-typed. The
-          URL becomes the search state, which is why there's nothing to wire up. */}
-      <form method="get" className="mt-4 flex gap-2">
+      {/* Plain GET form. The browser turns a submit into a navigation to
+          /?q=..., so the URL is the search state and there's nothing to wire. */}
+      <form method="get" className="mt-5 flex gap-2">
         {tag && <input type="hidden" name="tag" value={tag} />}
-        <input
+        <Input
           type="search"
           name="q"
           defaultValue={q}
           placeholder="Search titles..."
           autoComplete="off"
-          className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
         />
-        <button
-          type="submit"
-          className="shrink-0 rounded bg-gray-100 px-3 py-2 text-sm font-medium hover:bg-gray-200"
-        >
+        <Button type="submit" variant="secondary">
           Search
-        </button>
+        </Button>
       </form>
 
       {allTags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           <Link
             href={filterHref(undefined, q)}
-            className={!tag ? "font-semibold underline" : "text-gray-500 hover:underline"}
+            className={badgeVariants({ variant: !tag ? "default" : "secondary" })}
           >
             All
           </Link>
@@ -88,7 +83,7 @@ export default async function HomePage({
             <Link
               key={t}
               href={filterHref(t, q)}
-              className={t === tag ? "font-semibold underline" : "text-gray-500 hover:underline"}
+              className={badgeVariants({ variant: t === tag ? "default" : "secondary" })}
             >
               {t}
             </Link>
@@ -97,36 +92,59 @@ export default async function HomePage({
       )}
 
       {allRecipes.length === 0 ? (
-        <p className="mt-6 text-sm text-gray-500">
+        <p className="text-muted-foreground mt-8 text-sm">
           {tag || q ? (
             "No recipes match that filter."
           ) : (
             <>
-              Nothing here yet. Run <code>npm run db:seed</code> or add one.
+              Nothing here yet.{" "}
+              <Link href="/recipes/new" className="underline">
+                Add one
+              </Link>
+              .
             </>
           )}
         </p>
       ) : (
-        <ul className="mt-6 divide-y divide-gray-200">
+        <ul className="mt-6 divide-y">
           {allRecipes.map((recipe) => (
-            <li key={recipe.id} className="py-4">
-              <div className="flex items-baseline gap-2">
-                <Link
-                  href={`/recipes/${recipe.id}`}
-                  className="font-medium hover:underline"
-                >
-                  {recipe.title}
-                </Link>
-                <WantToMakeToggle recipeId={recipe.id} initialValue={recipe.wantToMake} />
+            <li key={recipe.id} className="flex gap-3 py-4">
+              {recipe.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element -- external, not worth optimizing
+                <img
+                  src={recipe.imageUrl}
+                  alt=""
+                  className="size-16 shrink-0 rounded-md object-cover"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <Link
+                    href={`/recipes/${recipe.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    {recipe.title}
+                  </Link>
+                  <WantToMakeToggle recipeId={recipe.id} initialValue={recipe.wantToMake} />
+                </div>
+                {recipe.ingredients && (
+                  <p className="text-muted-foreground mt-0.5 line-clamp-1 text-sm">
+                    {recipe.ingredients.split("\n").filter(Boolean).join(", ")}
+                  </p>
+                )}
+                {recipe.tags.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {recipe.tags.map((t) => (
+                      <span
+                        key={t}
+                        className={badgeVariants({ variant: "outline", className: "text-muted-foreground" })}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              {recipe.ingredients && (
-                <p className="mt-1 line-clamp-1 text-sm text-gray-500">
-                  {recipe.ingredients.split("\n").join(", ")}
-                </p>
-              )}
-              {recipe.tags.length > 0 && (
-                <p className="mt-1 text-xs text-gray-400">{recipe.tags.join(", ")}</p>
-              )}
             </li>
           ))}
         </ul>
