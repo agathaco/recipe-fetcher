@@ -15,20 +15,20 @@ in my own words. Checked means the entry is written.
 
 ### Stack and infrastructure
 
-- [ ] **React** as the UI library. Easy call: I already know it, and I want zero friction on
+- [x] **React** as the UI library. Easy call: I already know it, and I want zero friction on
       the parts I am not here to learn. Alternatives: Vue, Svelte, SolidJS, Angular.
-- [ ] **Next.js (App Router)** as the framework. Not really a choice, it is the thing being
+- [x] **Next.js (App Router)** as the framework. Not really a choice, it is the thing being
       learned, but worth stating what I am buying and the alternatives I am skipping: Remix /
       React Router 7, TanStack Start, Astro, SvelteKit, Nuxt, or a plain Vite SPA plus a
       separate API server.
-- [ ] **Vercel** for hosting. Deployed. Alternatives: Netlify, Cloudflare Pages, Render,
+- [x] **Vercel** for hosting. Deployed. Alternatives: Netlify, Cloudflare Pages, Render,
       Railway, Fly.io, AWS Amplify, self-hosted VPS or Docker container.
 - [x] **Postgres on Neon** (database type and host). Alternatives: NoSQL (MongoDB), SQLite;
       hosts: self-managed VPS, always-on managed instance (RDS), Supabase.
 - [x] **Drizzle** as the ORM. Alternatives: Prisma, Kysely, raw SQL via node-postgres.
-- [ ] **Tailwind** for styling (maybe shadcn/ui). Alternatives: CSS Modules, vanilla-extract,
+- [x] **Tailwind** for styling (maybe shadcn/ui). Alternatives: CSS Modules, vanilla-extract,
       styled-components, Panda CSS.
-- [ ] **Auth: shared password checked in middleware.** Alternatives: Auth.js, Clerk, Lucia,
+- [x] **Auth: shared password checked in middleware.** Alternatives: Auth.js, Clerk, Lucia,
       Supabase Auth.
 - [x] **URL capture: native fetch plus JSON-LD parsing** (cheerio if needed). Alternatives:
       a scraping service, a headless browser, a paid recipe API.
@@ -39,13 +39,234 @@ in my own words. Checked means the entry is written.
 
 ### Patterns and architecture (write these as they come up in the build)
 
-- [ ] Querying the DB directly in a Server Component vs building an API route (days 3-4)
-- [ ] Server Action vs Route Handler for mutations (days 5-6)
+- [x] Querying the DB directly in a Server Component vs building an API route (days 3-4)
+- [x] Server Action vs Route Handler for mutations (days 5-6)
 - [x] revalidatePath and the caching model: when a page is cached and what busts it (days 5-6)
-- [ ] Data model shape: `ingredients` and `steps` as freeform text, not normalised tables;
+- [x] Data model shape: `ingredients` and `steps` as freeform text, not normalised tables;
       the `recipe_tag` many-to-many (already in the schema)
 - [x] `searchParams` in the URL as filter and search state, not React state (day 8)
 - [x] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
+
+---
+
+## Password auth in proxy.ts, not a real auth system
+
+**Date:** 06/09/2026
+
+**Context:** The app has one user, me. It still needs to not be world-writable once it's on a
+public URL. The question was how much auth is actually warranted.
+
+**Options I considered:**
+- A real auth library (Auth.js, Clerk, Lucia): user accounts, sessions, password hashing, social login
+- A shared password checked in `proxy.ts`: one secret in an env var, one cookie
+
+**Chose:** the shared password.
+
+**Why:** there is nothing a real auth system's features would do here. No second user, no
+per-user data, no roles, no "who did what". The only thing being protected is "a stranger
+who finds the URL can't edit my recipes." A password in an env var covers exactly that, and
+it is also the smaller thing to understand and the reason to learn how `proxy.ts` works.
+The cookie holds `SHA-256(password)` rather than the password itself so a leaked cookie
+doesn't expose the secret in plaintext.
+
+**What I'd revisit this under:** a second user. That flips it entirely: real identity
+(accounts, per-user password hashes, sessions), and the checks move into the data layer
+too, because the proxy gate alone can't answer "is this *your* recipe". At that point it's
+Auth.js, not a bigger password.
+
+**Confidence:** high on why this is enough now. Medium on the exact migration path to real
+auth, I know the shape but haven't done it.
+
+---
+
+## Server Actions for every mutation, not Route Handlers
+
+**Date:** 06/09/2026
+
+**Context:** Every write in the app (add, edit, delete, toggle, tags, login) needed a
+server-side entry point. Next gives two options: a Server Action, or a Route Handler
+(`app/api/.../route.ts`, a plain HTTP endpoint).
+
+**Options I considered:**
+- Server Actions: functions marked `"use server"`, wired straight to a `<form action>` or
+  called from a client component
+- Route Handlers: define an HTTP endpoint, POST to it from the client
+
+**Chose:** Server Actions for all of them.
+
+**Why:** the mutation lives next to the component that triggers it, there is no endpoint to
+name, route, and secure separately, and a form wired to a Server Action still submits with
+JavaScript disabled. A Route Handler only earns its place when the caller is *not* my own
+UI: an external service, a webhook, a mobile app, or a streaming response. Nothing in v1 is
+that. The one future candidate is the stretch LLM parse feature, which the SPEC deliberately
+frames as a Route Handler so it's a clean seam for project 2's Python service.
+
+**What I'd revisit this under:** needing any of the app's write logic callable from outside
+this app, or a mutation that needs to stream its response.
+
+**Confidence:** high.
+
+---
+
+## Querying Postgres directly in Server Components, no API layer
+
+**Date:** 06/09/2026
+
+**Context:** The list and detail pages need to read recipes from Postgres and render them.
+The React apps I've worked in did that with a client component calling a `/api/recipes`
+endpoint and a loading spinner.
+
+**Options I considered:**
+- Client component + `/api/recipes` route + `fetch` + loading state: the pattern I knew
+- Server Component that imports the Drizzle client and queries the DB directly: no endpoint,
+  no client fetch, no spinner
+
+**Chose:** the Server Component querying directly.
+
+**Why:** these pages are read-only and render on the server, so there is no reason to
+round-trip HTTP to my own machine. The query runs during render, the HTML arrives with the
+data in it, and there is no loading state to design because the user never sees an empty
+page. An API route would only be worth it if something outside this app needed the same
+data. Nothing does.
+
+**What I'd revisit this under:** adding a second client (a mobile app), or a query getting
+slow enough that I want to stream the page with the list in a Suspense boundary, or needing
+the recipe data from a background job.
+
+**Confidence:** high. This is the single biggest shift from the client-fetch model I was
+used to, and I can explain exactly why it's fine here.
+
+---
+
+## Data model: flat, with `ingredients` and `steps` as text
+
+**Date:** 06/09/2026
+
+**Context:** How structured should a recipe be. The obvious pull is to model ingredients as
+their own table with quantities and units.
+
+**Options I considered:**
+- Normalised: an `ingredient` table, a `recipe_ingredient` table with amount + unit, unit
+  conversion, etc.
+- Flat: `ingredients` and `steps` are `text` columns, one item per line, exactly as typed
+
+**Chose:** flat.
+
+**Why:** the structured ingredient graph (units, densities, substitutions, scaling) is a
+real, hard problem, and it is explicitly project 2's, not a v1 distraction. v1 only needs to
+store what I typed and show it back. The one relational concept worth practising here is the
+tag many-to-many, not the ingredient graph.
+
+Tags *are* a separate `tag` table plus a `recipe_tag` join, not a text column on `recipe`,
+because a tag is shared across many recipes: stored once and pointed at, so renaming a tag
+or listing every tag is a single-row operation instead of a scan-and-dedupe over every
+recipe.
+
+**What I'd revisit this under:** wanting any feature that needs to reason about ingredients
+as data (a shopping list, "can I make this now", scaling). That is the project 2 boundary.
+
+**Confidence:** high. The scope line is drawn in the SPEC and this respects it.
+
+---
+
+## Tailwind for styling
+
+**Date:** 06/09/2026
+
+**Context:** The app needs styling. Styling is explicitly not what this project is for.
+
+**Options I considered:**
+- Tailwind: utility classes in the markup
+- CSS Modules, vanilla-extract, styled-components, Panda CSS: some form of separate styles
+
+**Chose:** Tailwind.
+
+**Why:** it's the choice that lets me spend the least time on styling. No separate files, no
+naming classes, no context-switching out of the component. It's also the create-next-app
+default, so zero setup. The cost is long `className` strings and having to learn the utility
+names, both of which I accept for a project where the visual design does not matter.
+
+**What I'd revisit this under:** a project where design *is* a goal, or a component set big
+enough to want a real library (I'd add shadcn/ui, which is Tailwind underneath anyway).
+
+**Confidence:** high, and low stakes.
+
+---
+
+## Vercel for hosting
+
+**Date:** 06/09/2026
+
+**Context:** The app needs to be deployed somewhere real. Deployment is not the thing being
+learned.
+
+**Options I considered:**
+- Vercel: made by the Next.js team
+- Netlify, Cloudflare Pages: similar git-push platforms
+- Render, Railway, Fly.io: general PaaS, run Next as a long-lived Node server
+- Self-hosted VPS or a container: full control, own the ops
+
+**Chose:** Vercel.
+
+**Why:** every Next.js feature is built and tested on Vercel first, it's zero-config (detects
+Next, just works), git push deploys, every branch gets a preview URL, and the free tier
+covers a personal app. Deployment friction here is wasted time, so the reference path wins.
+The cost is soft lock-in to some Vercel-specific behaviour and a pricing cliff past the free
+tier that would bite a high-traffic site.
+
+**What I'd revisit this under:** real traffic making the pricing matter, or wanting to learn
+deployment and infrastructure as its own goal (then a VPS or container).
+
+**Confidence:** high.
+
+---
+
+## Next.js App Router as the framework
+
+**Date:** 06/09/2026
+
+**Context:** Not a free choice, learning Next.js is the entire point of this project. But
+worth stating what that buys and what's being skipped.
+
+**Options I considered:**
+- Next.js App Router: the current model, RSC + Server Actions
+- Next.js Pages Router: the older Next model
+- Remix / React Router 7, TanStack Start: other React meta-frameworks
+- SvelteKit, Nuxt, Astro: other-framework equivalents
+- A plain Vite SPA plus a separate API server: the setup I already know
+
+**Chose:** Next.js, App Router.
+
+**Why:** it's the framework that shows up most in the job specs I'm targeting, and the App
+Router (not Pages) is where it's heading, so learning the current model is the point. It also
+forces me to actually understand the server/client split rather than defaulting to a SPA.
+
+**What I'd revisit this under:** nothing for this project. In general, Remix/React Router is
+the closest alternative and I'd want to be able to argue Next vs it on the merits, which I
+can't fully yet.
+
+**Confidence:** high that this is what I want to learn. Medium on comparing it to Remix in
+depth.
+
+---
+
+## React as the UI library
+
+**Date:** 06/09/2026
+
+**Context:** Something has to render the UI.
+
+**Options I considered:** React, Vue, Svelte, SolidJS, Angular.
+
+**Chose:** React.
+
+**Why:** I've used it for years, so it adds no cognitive load on top of the thing I'm
+actually here to learn. Next.js is built on React anyway, so this isn't really a separate
+decision. I wanted friction concentrated on the new material, not the familiar layer.
+
+**What I'd revisit this under:** nothing for this project.
+
+**Confidence:** high, trivially.
 
 ---
 
