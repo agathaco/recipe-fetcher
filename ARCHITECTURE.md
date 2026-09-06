@@ -61,6 +61,9 @@ the server/client boundary, and the caching model.
 | `app/lib/capture.ts` | `captureFromWebUrl`, `captureFromInstagramUrl` | server-side `fetch` of a third-party page/API, never runs in the browser |
 | `app/lib/data.ts` | `getRecipes`, `getAllTagNames` | manual join + group-in-JS for the filterable list; Drizzle's relational `with` for the single-recipe read |
 | `app/components/want-to-make-toggle.tsx` | the toggle button | the only `"use client"` file in the app |
+| `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); redirects to `/login` without a valid cookie |
+| `app/lib/auth.ts` | cookie name + digest helper | Web-Crypto only, so it runs in both the proxy (Edge) and the login action (Node) |
+| `app/login/page.tsx` | password form | posts to the `login` Server Action |
 | `app/globals.css` | Tailwind entry | (not Next specific) |
 | `db/index.ts` | Drizzle client | server-only module, imported by Server Components/Actions |
 | `db/schema.ts` | Table definitions | (Drizzle, not Next) |
@@ -103,8 +106,12 @@ replace it with the real model: pages are cached by default, and `revalidatePath
 ## How it maps to Vercel
 
 Each dynamic route becomes a serverless function. A request spins up a short-lived function,
-which renders the page (querying Neon over HTTP), returns the HTML, and is torn down. Static
-routes (`/recipes/new` right now) are served as prebuilt HTML from the CDN.
+which renders the page (querying Neon over HTTP), returns the HTML, and is torn down.
+`proxy.ts` runs as an Edge function ahead of all of that. There are no static routes left:
+everything reads the DB, cookies, or `searchParams`, so all routes render on demand.
+
+Two env vars are needed in Vercel: `DATABASE_URL` (Neon) and `APP_PASSWORD` (the auth gate;
+if unset, the gate is disabled and the app is public).
 
 ---
 
@@ -136,3 +143,6 @@ routes (`/recipes/new` right now) are served as prebuilt HTML from the CDN.
 | 9 | `"use client"` | `app/components/want-to-make-toggle.tsx` | the app's first and only client-rendered component; ships JS, can use hooks and event handlers |
 | 9 | `useOptimistic` + `useTransition` | same file | flips the button on the current frame, before the Server Action's network round trip resolves; reverts to the real value once `revalidatePath` produces a fresh server render |
 | 9 | Server Action called directly (no `<form>`) | `toggleWantToMake` invoked from `onClick` | a Server Action isn't only for forms; a Client Component can call one like any async function, as long as it's wrapped in a transition |
+| 10 | `proxy.ts` (was `middleware.ts` pre-16) | project root | one file, runs before every matched request; `export function proxy` + a `config.matcher` regex |
+| 10 | Edge runtime constraints | `proxy.ts` + `app/lib/auth.ts` | proxy code can't use Node APIs, so the shared auth helper uses only Web Crypto |
+| 10 | `cookies()` from `next/headers` | `login` / `logout` in `app/lib/actions.ts` | read and set cookies inside a Server Action; setting one re-renders the current route |

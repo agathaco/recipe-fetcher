@@ -2,10 +2,12 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
 import { recipeTags, recipes, tags } from "@/db/schema";
+import { AUTH_COOKIE, sha256Hex } from "@/app/lib/auth";
 import { captureFromInstagramUrl, captureFromWebUrl, isInstagramUrl } from "@/app/lib/capture";
 
 // Everything in this file runs only on the server. It is imported by forms and
@@ -116,6 +118,36 @@ export async function deleteRecipe(id: string) {
 
   revalidatePath("/");
   redirect("/");
+}
+
+// The login form on /login posts here. One shared password, compared against
+// APP_PASSWORD. On success, set a cookie holding the password's digest; the
+// proxy checks incoming requests against that same value.
+export async function login(formData: FormData) {
+  const password = String(formData.get("password") ?? "");
+  const from = str(formData.get("from"));
+  const secret = process.env.APP_PASSWORD;
+
+  if (!secret || password !== secret) {
+    redirect(`/login?error=1${from ? `&from=${encodeURIComponent(from)}` : ""}`);
+  }
+
+  const store = await cookies();
+  store.set(AUTH_COOKIE, await sha256Hex(secret), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+  });
+
+  redirect(from.startsWith("/") ? from : "/");
+}
+
+export async function logout() {
+  const store = await cookies();
+  store.delete(AUTH_COOKIE);
+  redirect("/login");
 }
 
 // Called directly from a Client Component's onClick, not from a <form>. No

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
+import { logout } from "@/app/lib/actions";
 import { getAllTagNames, getRecipes } from "@/app/lib/data";
 
 // Always render on request so new recipes show up immediately.
@@ -40,14 +41,18 @@ export default async function HomePage({
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Recipes</h1>
-        <Link
-          href="/recipes/new"
-          className="text-sm font-medium text-blue-600 hover:underline"
-        >
-          + Add recipe
-        </Link>
+        <div className="flex shrink-0 items-baseline gap-3 text-sm">
+          <Link href="/recipes/new" className="font-medium text-blue-600 hover:underline">
+            + Add recipe
+          </Link>
+          <form action={logout}>
+            <button type="submit" className="text-gray-400 hover:text-gray-600 hover:underline">
+              Sign out
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* A plain GET form. No onSubmit, no state, no "use client": the browser

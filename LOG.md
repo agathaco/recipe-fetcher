@@ -103,3 +103,24 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   that part is manually verified rather than scripted.
 - **Taught:** the one legitimate reason to leave the server-only model: needing instant
   feedback before a round trip resolves. Everything else in the app stays a Server Component.
+
+## Day 10: auth gate
+
+- `proxy.ts` at the root (Next 16's rename of `middleware.ts`): checks an `rf_auth` cookie
+  against the SHA-256 digest of `APP_PASSWORD`, redirects to `/login?from=...` if it's wrong
+  or missing. `config.matcher` excludes `/login` and Next internals. No password configured
+  means the gate is off (local dev default).
+- `app/lib/auth.ts`: cookie name plus a Web-Crypto digest helper, written to run in both the
+  Edge proxy and the Node login action.
+- `login` / `logout` Server Actions in `app/lib/actions.ts`: `login` compares the password,
+  sets an httpOnly cookie holding the digest (not the password), redirects to `from`.
+  `logout` deletes the cookie.
+- `app/login/page.tsx`: password form. "Sign out" button added to the list page header.
+- `.env.local` now has `APP_PASSWORD=letmein` for local testing; Vercel needs the real one.
+- Verified end to end with curl: unauthed redirect, wrong password, right password sets the
+  correct digest cookie, authed access works, logout clears it and re-gates.
+- **Taught:** proxy/middleware as the place for a cheap pre-request check, the Edge runtime's
+  no-Node-APIs constraint, `cookies()` inside a Server Action, why the cookie holds a digest
+  rather than the secret.
+- Deferred: the polish pass (empty states are mostly there, responsive is fine, favicon is
+  still the scaffold default).
