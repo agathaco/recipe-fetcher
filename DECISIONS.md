@@ -26,8 +26,10 @@ in my own words. Checked means the entry is written.
 - [x] **Postgres on Neon** (database type and host). Alternatives: NoSQL (MongoDB), SQLite;
       hosts: self-managed VPS, always-on managed instance (RDS), Supabase.
 - [x] **Drizzle** as the ORM. Alternatives: Prisma, Kysely, raw SQL via node-postgres.
-- [x] **Tailwind** for styling (maybe shadcn/ui). Alternatives: CSS Modules, vanilla-extract,
+- [x] **Tailwind** for styling. Alternatives: CSS Modules, vanilla-extract,
       styled-components, Panda CSS.
+- [x] **shadcn/ui** for components (post-build UI pass). Alternatives: Mantine, MUI, Radix
+      primitives hand-styled, keep raw Tailwind.
 - [x] **Auth: shared password checked in middleware.** Alternatives: Auth.js, Clerk, Lucia,
       Supabase Auth.
 - [x] **URL capture: native fetch plus JSON-LD parsing** (cheerio if needed). Alternatives:
@@ -46,6 +48,38 @@ in my own words. Checked means the entry is written.
       the `recipe_tag` many-to-many (already in the schema)
 - [x] `searchParams` in the URL as filter and search state, not React state (day 8)
 - [x] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
+
+---
+
+## shadcn/ui for components
+
+**Date:** 06/09/2026
+
+**Context:** After the build was functionally done, the raw-Tailwind UI was rough: cramped
+forms, inconsistent spacing, small controls, a couple of visual bugs. Making it usable
+needed either a lot of hand-styling or a component library.
+
+**Options I considered:**
+- Keep hand-rolling with raw Tailwind
+- shadcn/ui: component source copied into the repo, built on Tailwind + Radix
+- Mantine: a full component library with its own styling system
+- MUI: Material Design components
+
+**Chose:** shadcn/ui.
+
+**Why:** building a custom UI is not the point of this project, and shadcn is the popular,
+well-trodden option in the Next.js world, so it's low-risk and useful to know. It sits on
+Tailwind (no new styling system to learn) and Radix (accessible dialogs, dropdowns, focus
+and keyboard handling for free). It isn't an npm dependency: the CLI copies component code
+into the repo, so I own it and can read and adjust it, which suits a learning project.
+Mantine and MUI would each mean adopting a whole styling system I'd have to learn, for a
+project where the UI is not the goal.
+
+**What I'd revisit this under:** a project where the visual identity matters. shadcn's
+defaults are deliberately neutral, so a shadcn app looks like every other shadcn app until
+you invest in restyling it. For this one, generic and clean is fine.
+
+**Confidence:** high. The tradeoff (generic look) is real but acceptable given the goal.
 
 ---
 
