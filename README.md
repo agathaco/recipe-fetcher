@@ -89,3 +89,4 @@ db/migrations/          generated SQL
 - [SPEC.md](./SPEC.md): the original scope and day-by-day plan
 - [LOG.md](./LOG.md): thin per-day record of what got built
 - [WALKTHROUGH.md](./WALKTHROUGH.md): ELI5 log of the days 1-2 setup
+- [IDEAS.md](./IDEAS.md): backlog, not committed to
