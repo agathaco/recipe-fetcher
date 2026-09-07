@@ -5,6 +5,7 @@
 
 import { Star } from "lucide-react";
 import { useOptimistic, useTransition } from "react";
+import { toast } from "sonner";
 
 import { cn } from "cn";
 import { toggleWantToMake } from "@/app/lib/actions";
@@ -27,7 +28,11 @@ export function WantToMakeToggle({
     const next = !optimisticValue;
     startTransition(async () => {
       setOptimisticValue(next);
-      await toggleWantToMake(recipeId, next);
+      try {
+        await toggleWantToMake(recipeId, next);
+      } catch {
+        toast.error("Couldn't update this recipe. Try again.");
+      }
     });
   }
 

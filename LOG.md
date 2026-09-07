@@ -230,3 +230,22 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   on `<body>`.
 - Left for a later pass: SSRF in `captureFromWebUrl`, no `error.tsx` boundary, no
   CHECK constraint on `rating`, `TagInput` missing full ARIA combobox roles.
+
+## Error handling (07/09)
+
+- **`app/error.tsx`** (route error boundary) + **`app/global-error.tsx`** (root-layout
+  boundary): a render throw now shows a "Something went wrong / Try again" card instead of
+  the raw Next overlay. `getRecipeById` no longer catches DB errors, so an outage reaches
+  the boundary instead of masquerading as a 404; a malformed uuid is still a plain 404.
+- **Forms**: `createRecipe` / `updateRecipe` return a `FormState` (`{ error? }`) instead of
+  throwing. New `components/recipe-form.tsx` (client) wraps `RecipeFields` with
+  `useActionState` + `useFormStatus` so a failed save shows inline and keeps the typed
+  values. The new and edit pages now render `<RecipeForm>` instead of a raw `<form>`.
+- **Optimistic actions**: `rating-stars`, `want-to-make-toggle`, and a new
+  `delete-recipe-button` (client, with a `confirm()`) catch a rejected action and show a
+  `sonner` toast. `<Toaster>` mounted once in the layout. Added `sonner` via shadcn, removed
+  the `next-themes` dep it pulled in (no theme switching here) and trimmed its wrapper.
+- Tests: `components/recipe-form.test.tsx` (inline error path), plus a failure-path case in
+  `rating-stars.test.tsx`. 37 passing.
+- DECISIONS.md: "Error handling: three layers, not one catch-all". ARCHITECTURE.md: new
+  "Error handling" section + touchpoint rows.

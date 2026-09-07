@@ -6,12 +6,16 @@ vi.mock("@/app/lib/actions", () => ({
   setRating: vi.fn(),
 }));
 
+const toastError = vi.fn();
+vi.mock("sonner", () => ({ toast: { error: (...args: unknown[]) => toastError(...args) } }));
+
 import { setRating } from "@/app/lib/actions";
 import { RatingStars } from "./rating-stars";
 
 beforeEach(() => {
   vi.mocked(setRating).mockReset();
   vi.mocked(setRating).mockResolvedValue(undefined);
+  toastError.mockReset();
 });
 
 describe("RatingStars", () => {
@@ -32,5 +36,13 @@ describe("RatingStars", () => {
     render(<RatingStars recipeId="r1" initialValue={3} />);
     await user.click(screen.getByRole("button", { name: "Rate 3 out of 5" }));
     expect(setRating).toHaveBeenCalledWith("r1", 0);
+  });
+
+  it("shows a toast when the save fails", async () => {
+    vi.mocked(setRating).mockRejectedValue(new Error("db down"));
+    const user = userEvent.setup();
+    render(<RatingStars recipeId="r1" initialValue={0} />);
+    await user.click(screen.getByRole("button", { name: "Rate 4 out of 5" }));
+    expect(toastError).toHaveBeenCalled();
   });
 });

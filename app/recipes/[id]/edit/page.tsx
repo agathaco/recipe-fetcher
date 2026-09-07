@@ -2,8 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { RecipeFields } from "@/components/recipe-fields";
-import { Button } from "@/components/ui/button";
+import { RecipeForm } from "@/components/recipe-form";
 import { updateRecipe } from "@/app/lib/actions";
 import { getAllTagNames, getRecipeById } from "@/app/lib/data";
 
@@ -19,7 +18,7 @@ export default async function EditRecipePage({
   if (!recipe) notFound();
 
   // Binding `id` in a Server Component produces a Server Action reference with
-  // `id` already attached. No client JS needed.
+  // `id` already attached; the form supplies the (prevState, formData) pair.
   const updateThisRecipe = updateRecipe.bind(null, id);
 
   return (
@@ -33,24 +32,21 @@ export default async function EditRecipePage({
       </Link>
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">Edit recipe</h1>
 
-      <form action={updateThisRecipe} className="mt-6">
-        <RecipeFields
-          allTags={allTags}
-          defaults={{
-            title: recipe.title,
-            sourceUrl: recipe.sourceUrl ?? undefined,
-            imageUrl: recipe.imageUrl ?? undefined,
-            ingredients: recipe.ingredients ?? undefined,
-            steps: recipe.steps ?? undefined,
-            notes: recipe.notes ?? undefined,
-            tags: recipe.tags,
-            wantToMake: recipe.wantToMake,
-          }}
-        />
-        <div className="mt-6">
-          <Button type="submit">Save changes</Button>
-        </div>
-      </form>
+      <RecipeForm
+        action={updateThisRecipe}
+        allTags={allTags}
+        submitLabel="Save changes"
+        defaults={{
+          title: recipe.title,
+          sourceUrl: recipe.sourceUrl ?? undefined,
+          imageUrl: recipe.imageUrl ?? undefined,
+          ingredients: recipe.ingredients ?? undefined,
+          steps: recipe.steps ?? undefined,
+          notes: recipe.notes ?? undefined,
+          tags: recipe.tags,
+          wantToMake: recipe.wantToMake,
+        }}
+      />
     </main>
   );
 }

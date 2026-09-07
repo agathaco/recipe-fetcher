@@ -1,7 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
-import { RecipeFields } from "@/components/recipe-fields";
+import { RecipeForm } from "@/components/recipe-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -59,24 +59,20 @@ export default async function NewRecipePage({
         </CardContent>
       </Card>
 
-      {/* Plain form + Server Action: submits even with JS disabled. */}
-      <form action={createRecipe} className="mt-6">
-        <input type="hidden" name="sourceType" value={param(params.sourceType) ?? "manual"} />
-        <RecipeFields
-          allTags={allTags}
-          defaults={{
-            title: param(params.title),
-            sourceUrl: param(params.sourceUrl),
-            imageUrl,
-            ingredients: param(params.ingredients),
-            steps: param(params.steps),
-            notes: param(params.notes),
-          }}
-        />
-        <div className="mt-6">
-          <Button type="submit">Save recipe</Button>
-        </div>
-      </form>
+      <RecipeForm
+        action={createRecipe}
+        allTags={allTags}
+        submitLabel="Save recipe"
+        sourceType={param(params.sourceType) ?? "manual"}
+        defaults={{
+          title: param(params.title),
+          sourceUrl: param(params.sourceUrl),
+          imageUrl,
+          ingredients: param(params.ingredients),
+          steps: param(params.steps),
+          notes: param(params.notes),
+        }}
+      />
     </main>
   );
 }

@@ -8,25 +8,28 @@ import { cache } from "react";
 import { db } from "@/db";
 import { recipeTags, recipes, tags } from "@/db/schema";
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Wrapped in React.cache so the detail page's generateMetadata and the page
 // body share one query per request instead of hitting the DB twice.
 export const getRecipeById = cache(async (id: string) => {
-  // id is a uuid column; a malformed id makes Postgres throw. Treat that the
-  // same as "not found" rather than crashing the page.
-  try {
-    // Drizzle's relational query API (the `with` option): a single query that
-    // walks recipe -> recipe_tag -> tag using the relations() defined in
-    // schema.ts. Reasonable here because there's no cross-table filtering,
-    // just "give me this one recipe and everything attached to it."
-    const recipe = await db.query.recipes.findFirst({
-      where: eq(recipes.id, id),
-      with: { recipeTags: { with: { tag: true } } },
-    });
-    if (!recipe) return null;
-    return { ...recipe, tags: recipe.recipeTags.map((rt) => rt.tag.name) };
-  } catch {
-    return null;
-  }
+  // `id` is a uuid column and Postgres throws on a malformed value. Bail early
+  // so a bad URL reads as "not found"; a query that fails for any other reason
+  // is a real problem and is left to reach the error boundary, not disguised
+  // as a missing recipe.
+  if (!UUID_RE.test(id)) return null;
+
+  // Drizzle's relational query API (the `with` option): a single query that
+  // walks recipe -> recipe_tag -> tag using the relations() defined in
+  // schema.ts. Reasonable here because there's no cross-table filtering,
+  // just "give me this one recipe and everything attached to it."
+  const recipe = await db.query.recipes.findFirst({
+    where: eq(recipes.id, id),
+    with: { recipeTags: { with: { tag: true } } },
+  });
+  if (!recipe) return null;
+  return { ...recipe, tags: recipe.recipeTags.map((rt) => rt.tag.name) };
 });
 
 export async function getAllTagNames(): Promise<string[]> {

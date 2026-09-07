@@ -27,6 +27,8 @@ test("add, view, edit and delete a recipe", async ({ page }) => {
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("heading", { name: `${title}-v2` })).toBeVisible();
 
+  // Delete now asks for confirmation via a native dialog.
+  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete" }).click();
   await expect(page).toHaveURL("http://localhost:3000/");
   await expect(page.getByRole("heading", { name: `${title}-v2` })).toHaveCount(0);

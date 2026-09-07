@@ -49,6 +49,53 @@ in my own words. Checked means the entry is written.
 - [x] `searchParams` in the URL as filter and search state, not React state (day 8)
 - [x] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
 - [x] Testing: Vitest for units, Playwright for the RSC / Server Action flows
+- [x] Error handling: `error.tsx` boundary, `useActionState` for forms, toasts for optimistic actions
+
+---
+
+## Error handling: three layers, not one catch-all
+
+**Date:** 07/09/2026
+
+**Context:** Nothing handled failure. A form action threw `new Error("Title is required")`,
+which Next turned into a full-page crash that wiped whatever the user had typed. A database
+blip on the list page showed the raw Next error overlay. `getRecipeById` quietly turned any
+DB error into a "recipe not found". I wanted a real message for each failure, near the thing
+that failed.
+
+**Options I considered:**
+- One global `error.tsx` and let everything bubble to it
+- A toast library for everything, including form validation
+- Split by failure type: framework boundary for unexpected throws, `useActionState` for
+  form saves, toasts for the optimistic buttons
+
+**Chose:** split by failure type.
+
+**Why:** the three failures are genuinely different and a single mechanism handles one of
+them badly.
+- **Unexpected render throw** (DB down mid-page-load): this is what `error.tsx` /
+  `global-error.tsx` exist for. It gives a "Try again" that re-runs the segment. I also
+  stopped `getRecipeById` swallowing DB errors, so an outage looks like an outage, not a
+  404; only a malformed uuid is a real "not found".
+- **Form save failure** (empty title, or the write fails): throwing here is user-hostile,
+  it discards the form. `useActionState` lets the action `return { error }` instead, the
+  form stays mounted with its values, the message shows inline above the button.
+  `useFormStatus` gives the pending state for free. Still works with JS off (full-page POST,
+  message rendered on the response).
+- **Optimistic action failure** (rating, want-to-make, delete): the UI already moved. There
+  is no form to annotate and no page to replace, so a toast is the honest fit. `useOptimistic`
+  rolls the value back on its own; the toast just says why.
+
+**Cost:** three patterns to keep straight instead of one, plus `sonner` as a dependency
+(small, and the shadcn wrapper is in the repo). A confirm-on-delete came along with making
+the delete button a client component.
+
+**What I'd revisit this under:** if a design system with a real modal/dialog gets added, the
+`confirm()` on delete should move to that. If forms grew field-level validation, the single
+`error` string would need to become a per-field shape.
+
+**Confidence:** high on the split. Medium on `error.tsx` copy tone; it is deliberately vague
+about the cause because the user can't act on "NeonDbError".
 
 ---
 

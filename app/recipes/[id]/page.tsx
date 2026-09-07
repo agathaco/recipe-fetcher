@@ -2,11 +2,12 @@ import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { DeleteRecipeButton } from "@/app/components/delete-recipe-button";
 import { RatingStars } from "@/app/components/rating-stars";
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
 import { cn } from "cn";
 import { tagColorClasses } from "@/components/tag-pill";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { deleteRecipe } from "@/app/lib/actions";
 import { getRecipeById } from "@/app/lib/data";
 
@@ -66,11 +67,7 @@ export default async function RecipePage({
             <Pencil />
             Edit
           </Link>
-          <form action={deleteThisRecipe}>
-            <Button type="submit" variant="destructive" size="sm">
-              Delete
-            </Button>
-          </form>
+          <DeleteRecipeButton action={deleteThisRecipe} />
         </div>
       </div>
 

@@ -113,7 +113,9 @@ Three tables, deliberately flat (`db/schema.ts`):
 | `app/recipes/new/page.tsx` | Add form at `/recipes/new` | Server Component form, `<form action={}>` |
 | `app/recipes/[id]/edit/page.tsx` | Edit form at `/recipes/:id/edit` | pre-filled form, `updateRecipe.bind(null, id)` |
 | `app/login/page.tsx` | Password form at `/login` | posts to the `login` Server Action |
-| `app/lib/actions.ts` | every mutation: `createRecipe`, `updateRecipe`, `deleteRecipe`, `toggleWantToMake`, `importFromUrl`, `login`, `logout` | Server Actions (`"use server"`), `.bind()`, `revalidatePath`, `redirect`, `cookies()` |
+| `app/lib/actions.ts` | every mutation: `createRecipe`, `updateRecipe`, `deleteRecipe`, `toggleWantToMake`, `setRating`, `importFromUrl`, `login`, `logout` | Server Actions (`"use server"`), `.bind()`, `revalidatePath`, `redirect`, `cookies()`; `createRecipe`/`updateRecipe` return a `FormState` for `useActionState` |
+| `app/error.tsx` | route-level error boundary | `"use client"`, `error` + `reset` props |
+| `app/global-error.tsx` | root-layout error boundary | `"use client"`, renders its own `<html>`/`<body>` |
 | `app/lib/data.ts` | `getRecipeById`, `getRecipes`, `getAllTagNames` | server-side read helpers; manual join + group-in-JS for the filterable list, Drizzle's relational `with` for the single-recipe read |
 | `app/lib/capture.ts` | `captureFromWebUrl`, `captureFromInstagramUrl` | server-side `fetch` of a third-party page/API, never runs in the browser |
 | `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `expectedAuthCookie` | Web-Crypto only, shared by the Edge proxy and the Node login action |
@@ -122,7 +124,10 @@ Three tables, deliberately flat (`db/schema.ts`):
 | `app/components/rating-stars.tsx` | the detail-page star rating | `"use client"`, optimistic |
 | `components/star-row.tsx` | read-only stars on list cards | plain component |
 | `app/components/tag-input.tsx` | the recipe form tag combobox | `"use client"` |
+| `app/components/delete-recipe-button.tsx` | the detail-page Delete button | `"use client"`, `confirm()` + toast on failure |
+| `components/recipe-form.tsx` | the `<form>` shell around `RecipeFields` for add and edit | `"use client"`, `useActionState`, `useFormStatus` |
 | `components/tag-pill.tsx` | colour-per-tag pill + `tagColorClasses` helper | plain component |
+| `components/ui/sonner.tsx` | the toast outlet, mounted once in the layout | `"use client"` |
 | `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); redirects to `/login` without a valid cookie |
 | `app/globals.css` | Tailwind entry + shadcn theme tokens (fuchsia-purple primary, `.text-brand` gradient, `--font-heading` = Bricolage Grotesque) | (not Next specific) |
 | `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
@@ -135,8 +140,8 @@ Three tables, deliberately flat (`db/schema.ts`):
 
 ## The server/client boundary
 
-Almost everything runs on the server. Three Client Components are the exceptions, each
-because it needs real browser state.
+Almost everything runs on the server. A handful of Client Components are the exceptions,
+each because it needs real browser state or has to react to a failure.
 
 - The database client, the connection string, and all query and mutation logic stay
   server-side and never reach the browser bundle.
@@ -152,8 +157,26 @@ because it needs real browser state.
   an optimistic update, same shape as the want-to-make toggle.
 - `app/components/tag-input.tsx`: the recipe form tag combobox (filter, create, removable
   pills). Selected tags become hidden `<input name="tag">`s the Server Action reads.
-- The delete button has no "are you sure?" confirmation on purpose: a `confirm()` dialog
-  would need another Client Component for a marginal gain. Left as a plain form-button.
+- `components/recipe-form.tsx`: the `<form>` around the shared fields. `useActionState`
+  turns a failed save into an inline message with the form still filled in; `useFormStatus`
+  drives the "Saving..." button state.
+- `app/components/delete-recipe-button.tsx`: needs a `confirm()` step and a place to show
+  "that didn't work", so the bound `deleteRecipe` action is called from a client `onClick`
+  and a thrown error becomes a toast.
+
+## Error handling
+
+Three layers, matching the three ways things fail:
+
+- **Unexpected render throws** (DB outage while a page loads): `app/error.tsx` catches them
+  and offers "Try again" (`reset`) or a link home. `app/global-error.tsx` is the same idea
+  one level up, for the root layout. `getRecipeById` deliberately does *not* swallow DB
+  errors as "not found" any more; only a syntactically invalid uuid is a 404.
+- **Form save failures** (validation or a write that fails): `createRecipe` / `updateRecipe`
+  return `{ error }` instead of throwing, and `useActionState` in `recipe-form.tsx` renders
+  it inline without losing what was typed.
+- **Optimistic-action failures** (`toggleWantToMake`, `setRating`, delete): the client catch
+  shows a `sonner` toast; the optimistic UI value reverts by itself.
 
 ## What runs where
 
@@ -220,3 +243,9 @@ if unset, the gate is disabled and the app is public).
 | 10 | `proxy.ts` (was `middleware.ts` pre-16) | project root | one file, runs before every matched request; `export function proxy` + a `config.matcher` regex |
 | 10 | Edge runtime constraints | `proxy.ts` + `app/lib/auth.ts` | proxy code can't use Node APIs, so the shared auth helper uses only Web Crypto |
 | 10 | `cookies()` from `next/headers` | `login` / `logout` in `app/lib/actions.ts` | read and set cookies inside a Server Action; setting one re-renders the current route |
+| errors | `error.tsx` | `app/error.tsx` | route-level error boundary; Next swaps it in when a Server Component render (or a data helper it calls) throws. Must be `"use client"`, gets `error` + `reset` props |
+| errors | `global-error.tsx` | `app/global-error.tsx` | catches throws in the root layout itself; replaces the whole document so it renders its own `<html>`/`<body>` |
+| errors | `useActionState` | `components/recipe-form.tsx` | wraps a Server Action so it can return `{ error }` instead of throwing; the form stays mounted and keeps its values, the message renders inline |
+| errors | `useFormStatus` | `components/recipe-form.tsx` (`SubmitButton`) | reads the pending state of the enclosing `<form>` to disable the button and show "Saving..." |
+| errors | expected vs unexpected errors | `app/lib/actions.ts`, `app/lib/data.ts` | handled cases (bad input, save failed) return a message; genuinely unexpected throws are left to reach `error.tsx`. `getRecipeById` only treats a malformed uuid as "not found", not a DB outage |
+| errors | `sonner` toast | `app/layout.tsx` `<Toaster>`, `rating-stars` / `want-to-make-toggle` / `delete-recipe-button` | client-side failures of an optimistic action surface as a toast; the optimistic value reverts on its own |

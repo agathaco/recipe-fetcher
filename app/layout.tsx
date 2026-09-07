@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Bricolage_Grotesque, Geist } from "next/font/google";
 import "./globals.css";
 
+import { Toaster } from "@/components/ui/sonner";
+
 const geistSans = Geist({
   // shadcn's theme maps Tailwind's `font-sans` to `--font-sans`.
   variable: "--font-sans",
@@ -33,6 +35,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full" suppressHydrationWarning>
         {children}
+        {/* One app-wide toast outlet; client components call toast() from sonner. */}
+        <Toaster position="bottom-right" />
       </body>
     </html>
   );

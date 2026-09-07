@@ -13,6 +13,15 @@ import { captureFromInstagramUrl, captureFromWebUrl, isInstagramUrl } from "@/ap
 // Everything in this file runs only on the server. It is imported by forms and
 // invoked over the network as a POST, so it must validate its own input.
 
+// The shape the two big form actions hand back to `useActionState`. An empty
+// object means "no error yet"; a filled `error` is shown inline by the form.
+// Redirect-on-success still happens by throwing, so the happy path returns
+// nothing that the form ever renders.
+export type FormState = { error?: string };
+
+const SAVE_FAILED =
+  "Couldn't reach the database. Give it a moment and try again.";
+
 function str(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -63,56 +72,71 @@ async function setRecipeTags(recipeId: string, rawNames: string[]) {
   }
 }
 
-export async function createRecipe(formData: FormData) {
+// Signature is (prevState, formData) so it can back a `useActionState` form.
+export async function createRecipe(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const title = str(formData.get("title"));
-  if (!title) {
-    throw new Error("Title is required");
+  if (!title) return { error: "Give the recipe a title before saving." };
+
+  let createdId: string;
+  try {
+    const [created] = await db
+      .insert(recipes)
+      .values({
+        title,
+        sourceUrl: strOrNull(formData.get("sourceUrl")),
+        sourceType: strOrNull(formData.get("sourceType")) ?? "manual",
+        imageUrl: strOrNull(formData.get("imageUrl")),
+        ingredients: linesFromRows(formData, "ingredient"),
+        steps: linesFromRows(formData, "step"),
+        notes: strOrNull(formData.get("notes")),
+        wantToMake: formData.get("wantToMake") === "on",
+      })
+      .returning();
+
+    await setRecipeTags(created.id, formData.getAll("tag").map(String));
+    createdId = created.id;
+  } catch {
+    return { error: SAVE_FAILED };
   }
-
-  const [created] = await db
-    .insert(recipes)
-    .values({
-      title,
-      sourceUrl: strOrNull(formData.get("sourceUrl")),
-      sourceType: strOrNull(formData.get("sourceType")) ?? "manual",
-      imageUrl: strOrNull(formData.get("imageUrl")),
-      ingredients: linesFromRows(formData, "ingredient"),
-      steps: linesFromRows(formData, "step"),
-      notes: strOrNull(formData.get("notes")),
-      wantToMake: formData.get("wantToMake") === "on",
-    })
-    .returning();
-
-  await setRecipeTags(created.id, formData.getAll("tag").map(String));
 
   // Bust the cached list page so the new recipe shows up.
   revalidatePath("/");
-  // Throws a control-flow exception; nothing after this runs.
-  redirect(`/recipes/${created.id}`);
+  // Throws a control-flow exception (outside the try, so it isn't caught);
+  // nothing after this runs.
+  redirect(`/recipes/${createdId}`);
 }
 
 // The edit form calls this via updateRecipe.bind(null, id), so `id` arrives as
-// a real argument and `formData` is still whatever the form submitted.
-export async function updateRecipe(id: string, formData: FormData) {
+// a real argument, then the `useActionState` (prevState, formData) pair.
+export async function updateRecipe(
+  id: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const title = str(formData.get("title"));
-  if (!title) {
-    throw new Error("Title is required");
+  if (!title) return { error: "Give the recipe a title before saving." };
+
+  try {
+    await db
+      .update(recipes)
+      .set({
+        title,
+        sourceUrl: strOrNull(formData.get("sourceUrl")),
+        imageUrl: strOrNull(formData.get("imageUrl")),
+        ingredients: linesFromRows(formData, "ingredient"),
+        steps: linesFromRows(formData, "step"),
+        notes: strOrNull(formData.get("notes")),
+        wantToMake: formData.get("wantToMake") === "on",
+      })
+      .where(eq(recipes.id, id));
+
+    await setRecipeTags(id, formData.getAll("tag").map(String));
+  } catch {
+    return { error: SAVE_FAILED };
   }
-
-  await db
-    .update(recipes)
-    .set({
-      title,
-      sourceUrl: strOrNull(formData.get("sourceUrl")),
-      imageUrl: strOrNull(formData.get("imageUrl")),
-      ingredients: linesFromRows(formData, "ingredient"),
-      steps: linesFromRows(formData, "step"),
-      notes: strOrNull(formData.get("notes")),
-      wantToMake: formData.get("wantToMake") === "on",
-    })
-    .where(eq(recipes.id, id));
-
-  await setRecipeTags(id, formData.getAll("tag").map(String));
 
   // Both the list (title/badge can change) and this recipe's own page are stale now.
   revalidatePath("/");

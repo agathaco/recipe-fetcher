@@ -6,6 +6,7 @@
 
 import { Star } from "lucide-react";
 import { useOptimistic, useState, useTransition } from "react";
+import { toast } from "sonner";
 
 import { cn } from "cn";
 import { setRating } from "@/app/lib/actions";
@@ -27,7 +28,12 @@ export function RatingStars({
     const next = value === optimistic ? 0 : value;
     startTransition(async () => {
       setOptimistic(next);
-      await setRating(recipeId, next);
+      try {
+        await setRating(recipeId, next);
+      } catch {
+        // The optimistic value snaps back on its own once the transition ends.
+        toast.error("Couldn't save your rating. Try again.");
+      }
     });
   }
 
