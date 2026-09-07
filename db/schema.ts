@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  integer,
   pgTable,
   primaryKey,
   text,
@@ -9,7 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 // Deliberately flat. `ingredients` and `steps` are freeform text, not their own
-// tables — the ingredient graph is project 2's problem. The one modelling concept
+// tables: the ingredient graph is project 2's problem. The one modelling concept
 // here is the `recipe_tag` many-to-many.
 
 export const recipes = pgTable("recipe", {
@@ -22,11 +23,12 @@ export const recipes = pgTable("recipe", {
   steps: text("steps"), // freeform / markdown
   notes: text("notes"),
   wantToMake: boolean("want_to_make").notNull().default(false),
+  rating: integer("rating"), // 1-5, or null for unrated
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()
-    // bumped by Drizzle on every update() call — no DB trigger needed
+    // bumped by Drizzle on every update() call, no DB trigger needed
     .$onUpdate(() => new Date()),
 });
 

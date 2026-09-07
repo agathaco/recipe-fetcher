@@ -168,3 +168,16 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   (`sm:grid-cols-2 lg:grid-cols-3`), image-forward, 4:3 hero, `UtensilsCrossed` placeholder
   when there's no image, and the want-to-make star as a circular overlay in the card corner
   (new `compact` prop on the toggle). Favicon is now a purple/pink/orange gradient.
+
+## Ratings + palette v4 (07/09)
+
+- **Colours shifted off the literal Instagram values** and away from orange: primary is now
+  a fuchsia-magenta (hue ~328), the `.text-brand` gradient runs violet to fuchsia to pink,
+  and the want-to-make toggle uses the primary purple instead of amber. Favicon gradient
+  matched.
+- **Card titles:** bigger (`text-[15px] font-semibold`) with more space above them.
+- **Star ratings:** new nullable `rating` integer column on `recipe` (migration
+  `0001_wet_callisto`). `setRating(id, n)` Server Action (direct-invoke, like
+  `toggleWantToMake`). `app/components/rating-stars.tsx` is a Client Component with hover
+  preview and optimistic update on the detail page; `components/star-row.tsx` is the
+  read-only display on list cards. Click the current rating again to clear it.

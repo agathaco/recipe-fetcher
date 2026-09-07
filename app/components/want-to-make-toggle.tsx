@@ -45,7 +45,7 @@ export function WantToMakeToggle({
         className={cn(
           "flex size-8 items-center justify-center rounded-full backdrop-blur transition",
           optimisticValue
-            ? "bg-amber-400 text-white hover:bg-amber-500"
+            ? "bg-primary text-primary-foreground hover:opacity-90"
             : "bg-black/40 text-white hover:bg-black/60",
         )}
       >
@@ -62,7 +62,7 @@ export function WantToMakeToggle({
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
         optimisticValue
-          ? "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
+          ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
           : "text-muted-foreground hover:bg-muted border-border",
       )}
     >

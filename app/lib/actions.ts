@@ -172,6 +172,19 @@ export async function toggleWantToMake(id: string, next: boolean) {
   revalidatePath(`/recipes/${id}`);
 }
 
+// Same pattern as toggleWantToMake. 0 (or anything out of range) clears the
+// rating back to null.
+export async function setRating(id: string, rating: number) {
+  const valid = Number.isInteger(rating) && rating >= 1 && rating <= 5;
+  await db
+    .update(recipes)
+    .set({ rating: valid ? rating : null })
+    .where(eq(recipes.id, id));
+
+  revalidatePath("/");
+  revalidatePath(`/recipes/${id}`);
+}
+
 // The "paste a URL" mini-form on the add-recipe page. This never writes to
 // the database itself: it fetches, tries to extract a recipe, and hands
 // whatever it found to the real add-recipe form via the URL, as searchParams.

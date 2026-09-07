@@ -2,6 +2,7 @@ import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { RatingStars } from "@/app/components/rating-stars";
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
 import { badgeVariants } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -72,18 +73,24 @@ export default async function RecipePage({
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <WantToMakeToggle recipeId={recipe.id} initialValue={recipe.wantToMake} />
-        {recipe.tags.map((tag) => (
-          <Link
-            key={tag}
-            href={`/?tag=${encodeURIComponent(tag)}`}
-            className={badgeVariants({ variant: "secondary" })}
-          >
-            {tag}
-          </Link>
-        ))}
+        <RatingStars recipeId={recipe.id} initialValue={recipe.rating ?? 0} />
       </div>
+
+      {recipe.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {recipe.tags.map((tag) => (
+            <Link
+              key={tag}
+              href={`/?tag=${encodeURIComponent(tag)}`}
+              className={badgeVariants({ variant: "secondary" })}
+            >
+              {tag}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {recipe.sourceUrl && (
         <a

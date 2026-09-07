@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SearchBox } from "@/app/components/search-box";
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
+import { StarRow } from "@/components/star-row";
 import { badgeVariants } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -102,7 +103,7 @@ export default async function HomePage({
           {allRecipes.map((recipe) => (
             <Card
               key={recipe.id}
-              className="group relative overflow-hidden pt-0 transition-shadow hover:shadow-lg"
+              className="group relative gap-0 overflow-hidden py-0 transition-shadow hover:shadow-lg"
             >
               <Link href={`/recipes/${recipe.id}`} className="block">
                 <div className="bg-muted aspect-[4/3] overflow-hidden">
@@ -119,10 +120,15 @@ export default async function HomePage({
                     </div>
                   )}
                 </div>
-                <div className="px-4 pb-1">
-                  <h3 className="leading-snug font-medium">{recipe.title}</h3>
+                <div className="px-4 pt-4 pb-4">
+                  <h3 className="text-[15px] leading-snug font-semibold">
+                    {recipe.title}
+                  </h3>
+                  {recipe.rating != null && (
+                    <StarRow value={recipe.rating} className="mt-1.5" />
+                  )}
                   {recipe.tags.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
+                    <div className="mt-2 flex flex-wrap gap-1">
                       {recipe.tags.slice(0, 3).map((t) => (
                         <span
                           key={t}
