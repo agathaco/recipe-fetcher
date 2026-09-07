@@ -48,6 +48,47 @@ in my own words. Checked means the entry is written.
       the `recipe_tag` many-to-many (already in the schema)
 - [x] `searchParams` in the URL as filter and search state, not React state (day 8)
 - [x] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
+- [x] Testing: Vitest for units, Playwright for the RSC / Server Action flows
+
+---
+
+## Testing: Vitest for units, Playwright for the Server-Component flows
+
+**Date:** 07/09/2026
+
+**Context:** The project had no tests. For an exercise about getting hands-on with a stack,
+that's the obvious gap. I already use Vitest for React, so the real question was whether a
+second tool for end-to-end was worth it given there are no complicated user flows.
+
+**Options I considered:**
+- Vitest only: unit and component tests, skip end-to-end
+- Vitest + Playwright: units in Vitest, full flows in a real browser
+- Add Jest or Cypress instead: the older equivalents
+
+**Chose:** Vitest plus Playwright.
+
+**Why:** Vitest cannot render `async` Server Components (Next's own docs say to use E2E for
+those), and Server Components plus Server Actions are the whole point of this project. So a
+unit-only suite would test the pure helpers and the client components but none of the thing
+I actually built. Playwright is the only way to exercise a page rendering from the database
+and a form triggering a Server Action and a redirect, together. The flows being simple is
+not a reason to skip it, the value is in testing the *integration*, not the flow. Jest and
+Cypress would each be a step backwards from tools I already use or that have clearly won.
+
+**What gets tested where:**
+- Vitest: `capture.ts` JSON-LD parsing (it had real bugs), `auth.ts` digest, the
+  form-data helpers, `tagColorClasses`, and the five client components.
+- Playwright: the auth gate, add / view / edit / delete a recipe, search filtering. Runs
+  against a dedicated Neon branch so the tests hit a real Postgres without touching my data.
+
+**What I'd revisit this under:** if the app grew a genuinely complex multi-step flow (a
+wizard, a checkout), that's where Playwright coverage would need to get deliberate rather
+than smoke-level. Also worth adding: a couple of integration tests of the Server Actions
+against the test database, sitting between the unit and E2E layers.
+
+**Confidence:** high on the tool split. Less sure yet about the test-database setup being
+the cleanest option (a Neon branch is simple but slower than a local Postgres would be, and
+the `neon-http` driver can't talk to a local Postgres without a driver change).
 
 ---
 
