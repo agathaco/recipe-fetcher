@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createRecipe, importFromUrl } from "@/app/lib/actions";
+import { getAllTagNames } from "@/app/lib/data";
 
 export const metadata = { title: "Add a recipe" };
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export default async function NewRecipePage({
   const params = await searchParams;
   const importFailed = field(params.importFailed) === "1";
   const imageUrl = field(params.imageUrl);
+  const allTags = await getAllTagNames();
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10">
@@ -64,6 +66,7 @@ export default async function NewRecipePage({
       <form action={createRecipe} className="mt-6">
         <input type="hidden" name="sourceType" value={field(params.sourceType) ?? "manual"} />
         <RecipeFields
+          allTags={allTags}
           defaults={{
             title: field(params.title),
             sourceUrl: field(params.sourceUrl),

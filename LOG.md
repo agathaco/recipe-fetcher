@@ -181,3 +181,17 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   `toggleWantToMake`). `app/components/rating-stars.tsx` is a Client Component with hover
   preview and optimistic update on the detail page; `components/star-row.tsx` is the
   read-only display on list cards. Click the current rating again to clear it.
+
+## Tag combobox + coloured pills (07/09)
+
+- `components/tag-pill.tsx`: `tagColorClasses(name)` hashes a tag name to one of 8 fixed
+  colour classes, so a tag is the same colour everywhere. `<TagPill>` for read-only display.
+- `app/components/tag-input.tsx` (5th "use client" component): the recipe form's tag field is
+  now a combobox. Selected tags are removable coloured pills inside the box, a dropdown below
+  lists existing tags and filters as you type, a "Create ..." row appears for a new name,
+  keyboard nav (arrows / Enter / Backspace-to-remove-last / Esc). Each selected tag is a
+  hidden `<input name="tag">`; `setRecipeTags` now takes `string[]` from `formData.getAll`.
+- Card tags, detail-page tags, and the filter row all render as the coloured pills now.
+  Detail + filter pills stay links. Removed the leftover `test` and unused `soup` tags.
+- Tested: existing tags pre-select on edit, create/dedup/lowercase on submit, new categories
+  are created. The dropdown interaction itself needs a browser.

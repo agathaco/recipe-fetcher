@@ -1,3 +1,4 @@
+import { TagInput } from "@/app/components/tag-input";
 import { RowsEditor } from "@/components/rows-editor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,7 +17,7 @@ type Defaults = {
   ingredients?: string;
   steps?: string;
   notes?: string;
-  tags?: string;
+  tags?: string[];
   wantToMake?: boolean;
 };
 
@@ -27,7 +28,13 @@ function toRows(text: string | undefined): string[] {
     .filter(Boolean);
 }
 
-export function RecipeFields({ defaults = {} }: { defaults?: Defaults }) {
+export function RecipeFields({
+  defaults = {},
+  allTags = [],
+}: {
+  defaults?: Defaults;
+  allTags?: string[];
+}) {
   return (
     <div className="space-y-6">
       <Card className="[--card-spacing:--spacing(6)]">
@@ -46,14 +53,8 @@ export function RecipeFields({ defaults = {} }: { defaults?: Defaults }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="tags">Tags</Label>
-            <Input
-              id="tags"
-              name="tags"
-              placeholder="dessert, quick, vegetarian"
-              defaultValue={defaults.tags}
-            />
-            <p className="text-muted-foreground text-xs">Comma-separated</p>
+            <Label>Tags</Label>
+            <TagInput defaultValue={defaults.tags ?? []} allTags={allTags} />
           </div>
           <div className="flex items-center gap-2">
             <Checkbox id="wantToMake" name="wantToMake" defaultChecked={defaults.wantToMake} />

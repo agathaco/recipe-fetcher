@@ -3,7 +3,9 @@ import Link from "next/link";
 
 import { SearchBox } from "@/app/components/search-box";
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
+import { cn } from "cn";
 import { StarRow } from "@/components/star-row";
+import { TagPill, tagColorClasses } from "@/components/tag-pill";
 import { badgeVariants } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -65,7 +67,7 @@ export default async function HomePage({
       </form>
 
       {allTags.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-1.5">
+        <div className="mt-4 flex flex-wrap items-center gap-1.5">
           <Link
             href={filterHref(undefined, q)}
             className={badgeVariants({ variant: !tag ? "default" : "secondary" })}
@@ -76,7 +78,13 @@ export default async function HomePage({
             <Link
               key={t}
               href={filterHref(t, q)}
-              className={badgeVariants({ variant: t === tag ? "default" : "secondary" })}
+              className={cn(
+                "inline-flex rounded-full px-2 py-0.5 text-xs font-medium transition",
+                tagColorClasses(t),
+                t === tag
+                  ? "ring-foreground/60 ring-2"
+                  : "opacity-70 hover:opacity-100",
+              )}
             >
               {t}
             </Link>
@@ -130,15 +138,7 @@ export default async function HomePage({
                   {recipe.tags.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {recipe.tags.slice(0, 3).map((t) => (
-                        <span
-                          key={t}
-                          className={badgeVariants({
-                            variant: "outline",
-                            className: "text-muted-foreground",
-                          })}
-                        >
-                          {t}
-                        </span>
+                        <TagPill key={t} name={t} />
                       ))}
                     </div>
                   )}

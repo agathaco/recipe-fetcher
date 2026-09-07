@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { RecipeFields } from "@/components/recipe-fields";
 import { Button } from "@/components/ui/button";
 import { updateRecipe } from "@/app/lib/actions";
-import { getRecipeById } from "@/app/lib/data";
+import { getAllTagNames, getRecipeById } from "@/app/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export default async function EditRecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const recipe = await getRecipeById(id);
+  const [recipe, allTags] = await Promise.all([getRecipeById(id), getAllTagNames()]);
   if (!recipe) notFound();
 
   // Binding `id` in a Server Component produces a Server Action reference with
@@ -35,6 +35,7 @@ export default async function EditRecipePage({
 
       <form action={updateThisRecipe} className="mt-6">
         <RecipeFields
+          allTags={allTags}
           defaults={{
             title: recipe.title,
             sourceUrl: recipe.sourceUrl ?? undefined,
@@ -42,7 +43,7 @@ export default async function EditRecipePage({
             ingredients: recipe.ingredients ?? undefined,
             steps: recipe.steps ?? undefined,
             notes: recipe.notes ?? undefined,
-            tags: recipe.tags.join(", "),
+            tags: recipe.tags,
             wantToMake: recipe.wantToMake,
           }}
         />

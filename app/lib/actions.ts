@@ -34,17 +34,13 @@ function linesFromRows(formData: FormData, name: string): string | null {
   return joined === "" ? null : joined;
 }
 
-// Replaces a recipe's whole tag set with the comma-separated list from the
-// form. Delete-then-reinsert is the simplest correct way to handle removals:
-// a tag left out of the input should stop being linked to this recipe.
-async function setRecipeTags(recipeId: string, tagsInput: FormDataEntryValue | null) {
+// Replaces a recipe's whole tag set with the list from the tag combobox (one
+// hidden <input name="tag"> per selected tag). Delete-then-reinsert is the
+// simplest correct way to handle removals: a tag left out should stop being
+// linked to this recipe.
+async function setRecipeTags(recipeId: string, rawNames: string[]) {
   const names = Array.from(
-    new Set(
-      str(tagsInput)
-        .split(",")
-        .map((name) => name.trim().toLowerCase())
-        .filter(Boolean),
-    ),
+    new Set(rawNames.map((name) => name.trim().toLowerCase()).filter(Boolean)),
   );
 
   await db.delete(recipeTags).where(eq(recipeTags.recipeId, recipeId));
@@ -87,7 +83,7 @@ export async function createRecipe(formData: FormData) {
     })
     .returning();
 
-  await setRecipeTags(created.id, formData.get("tags"));
+  await setRecipeTags(created.id, formData.getAll("tag").map(String));
 
   // Bust the cached list page so the new recipe shows up.
   revalidatePath("/");
@@ -116,7 +112,7 @@ export async function updateRecipe(id: string, formData: FormData) {
     })
     .where(eq(recipes.id, id));
 
-  await setRecipeTags(id, formData.get("tags"));
+  await setRecipeTags(id, formData.getAll("tag").map(String));
 
   // Both the list (title/badge can change) and this recipe's own page are stale now.
   revalidatePath("/");

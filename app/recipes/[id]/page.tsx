@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 
 import { RatingStars } from "@/app/components/rating-stars";
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
-import { badgeVariants } from "@/components/ui/badge";
+import { cn } from "cn";
+import { tagColorClasses } from "@/components/tag-pill";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { deleteRecipe } from "@/app/lib/actions";
 import { getRecipeById } from "@/app/lib/data";
@@ -84,7 +85,10 @@ export default async function RecipePage({
             <Link
               key={tag}
               href={`/?tag=${encodeURIComponent(tag)}`}
-              className={badgeVariants({ variant: "secondary" })}
+              className={cn(
+                "inline-flex rounded-full px-2 py-0.5 text-xs font-medium transition hover:opacity-80",
+                tagColorClasses(tag),
+              )}
             >
               {tag}
             </Link>
