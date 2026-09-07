@@ -145,18 +145,17 @@ project where the UI is not the goal.
 defaults are deliberately neutral, so a shadcn app looks like every other shadcn app until
 you invest in restyling it.
 
-**Follow-up (06/09/2026):** the stock zinc theme looked too generic, so I themed it "warm
-paper + terracotta" with a Fraunces serif for headings.
+**Follow-up (07/09/2026):** theming it took three passes. First "warm paper + terracotta"
+with a Fraunces serif, then "fresh market" with herb green, both still read as the current
+"AI-generated" default: low chroma, warm-tinted whites, an editorial serif. What landed:
+a cool near-white ground with zero warmth, a vivid magenta primary and an orange (the two
+ends of the Instagram gradient), a `.text-brand` gradient on the app title, and Bricolage
+Grotesque for headings. The recipe list also became an image-forward card grid rather than
+a text list. The palette is CSS variables only; the grid was a real layout change.
 
-**Follow-up 2 (07/09/2026):** that first theme was still too safe. Low-chroma terracotta on
-sepia-tinted white, plus Fraunces, is close to the current "AI-generated" default look.
-Went bolder: a "fresh market" palette (a confident herb green as the primary, warm amber as
-the accent, cleaner near-white ground, higher chroma overall) and Bricolage Grotesque, a
-chunky grotesque, for headings instead of the editorial serif. Still CSS variables plus one
-font, no component changes.
-
-**Confidence:** high on the library. The theme took two tries, which is the real lesson:
-"just theme it" is cheap, but a timid palette reads as no palette.
+**Confidence:** high on the library. The lesson from the three attempts: a timid palette
+reads as no palette, and "modern" here meant committing to saturation and to imagery, not
+just picking a nicer neutral.
 
 ---
 
