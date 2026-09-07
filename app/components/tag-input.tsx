@@ -134,7 +134,7 @@ export function TagInput({
       </div>
 
       {open && options.length > 0 && (
-        <ul className="bg-popover absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border p-1 shadow-md">
+        <ul className="bg-popover absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-md border p-1 shadow-md">
           {options.map((opt, i) => (
             <li key={opt.kind + opt.value}>
               <button

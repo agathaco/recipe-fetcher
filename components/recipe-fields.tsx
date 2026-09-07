@@ -37,7 +37,9 @@ export function RecipeFields({
 }) {
   return (
     <div className="space-y-6">
-      <Card className="[--card-spacing:--spacing(6)]">
+      {/* overflow-visible so the tag combobox dropdown isn't clipped by the
+          card's own overflow-hidden. */}
+      <Card className="overflow-visible [--card-spacing:--spacing(6)]">
         <CardHeader>
           <CardTitle>Recipe</CardTitle>
         </CardHeader>
