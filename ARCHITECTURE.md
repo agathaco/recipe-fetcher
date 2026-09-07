@@ -29,10 +29,10 @@ the server/client boundary, and the caching model.
   that fails falls back to an empty form.
 - **A recipe** has: title, source URL and type, an image, ingredients and steps (freeform
   text, one per line), notes, tags, and a "want to make" flag.
-- **List view** at `/`: all recipes newest first, filter by tag, search by title. Filter and
-  search state live entirely in the URL.
+- **List view** at `/`: a card grid, newest first, filter by tag, live search by title.
+  Filter and search state live entirely in the URL.
 - **Detail, edit, delete** for each recipe.
-- **"Want to make" toggle**: flips instantly (optimistic UI), on both the list and detail.
+- **"Want to make" toggle** and a **1-5 star rating**: both optimistic, instant.
 - **One-user auth**: a shared password checked in `proxy.ts` before every request.
 - **Deployed** on Vercel with Postgres on Neon.
 
@@ -54,8 +54,6 @@ Three tables, deliberately flat (`db/schema.ts`):
 `updated_at` is bumped by Drizzle on every `update()`, no DB trigger.
 
 ## Request lifecycles
-
-### Loading a page (`/`)
 
 ### Loading a page (`/`)
 
@@ -123,7 +121,7 @@ Three tables, deliberately flat (`db/schema.ts`):
 | `app/components/rating-stars.tsx` | the detail-page star rating | `"use client"`, optimistic |
 | `components/star-row.tsx` | read-only stars on list cards | plain component |
 | `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); redirects to `/login` without a valid cookie |
-| `app/globals.css` | Tailwind entry + shadcn theme tokens ("fresh market" palette: herb-green primary, amber accent; `--font-heading` = Bricolage Grotesque) | (not Next specific) |
+| `app/globals.css` | Tailwind entry + shadcn theme tokens (fuchsia-purple primary, `.text-brand` gradient, `--font-heading` = Bricolage Grotesque) | (not Next specific) |
 | `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
 | `components/recipe-fields.tsx` | the card sections shared by the add and edit forms | plain component |
 | `components/rows-editor.tsx` | add/remove row list for ingredients and steps | `"use client"`, submits repeated same-named inputs |
