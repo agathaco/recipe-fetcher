@@ -96,6 +96,7 @@ export async function updateRecipe(id: string, formData: FormData) {
     .set({
       title,
       sourceUrl: strOrNull(formData.get("sourceUrl")),
+      imageUrl: strOrNull(formData.get("imageUrl")),
       ingredients: strOrNull(formData.get("ingredients")),
       steps: strOrNull(formData.get("steps")),
       notes: strOrNull(formData.get("notes")),

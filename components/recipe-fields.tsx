@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 type Defaults = {
   title?: string;
   sourceUrl?: string;
+  imageUrl?: string;
   ingredients?: string;
   steps?: string;
   notes?: string;
@@ -50,17 +51,18 @@ export function RecipeFields({ defaults = {} }: { defaults?: Defaults }) {
         <Textarea id="notes" name="notes" rows={3} defaultValue={defaults.notes} />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="tags">Tags</Label>
+        <Input
+          id="tags"
+          name="tags"
+          placeholder="dessert, quick, vegetarian"
+          defaultValue={defaults.tags}
+        />
+        <p className="text-muted-foreground text-xs">Comma-separated</p>
+      </div>
+
       <div className="grid gap-6 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="tags">Tags</Label>
-          <Input
-            id="tags"
-            name="tags"
-            placeholder="dessert, quick, vegetarian"
-            defaultValue={defaults.tags}
-          />
-          <p className="text-muted-foreground text-xs">Comma-separated</p>
-        </div>
         <div className="space-y-2">
           <Label htmlFor="sourceUrl">Source URL</Label>
           <Input
@@ -71,7 +73,26 @@ export function RecipeFields({ defaults = {} }: { defaults?: Defaults }) {
             defaultValue={defaults.sourceUrl}
           />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="imageUrl">Image URL</Label>
+          <Input
+            id="imageUrl"
+            name="imageUrl"
+            type="url"
+            placeholder="https://"
+            defaultValue={defaults.imageUrl}
+          />
+        </div>
       </div>
+
+      {defaults.imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- external preview only
+        <img
+          src={defaults.imageUrl}
+          alt=""
+          className="size-28 rounded-md object-cover"
+        />
+      )}
 
       <div className="flex items-center gap-2">
         <Checkbox id="wantToMake" name="wantToMake" defaultChecked={defaults.wantToMake} />

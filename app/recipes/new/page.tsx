@@ -57,10 +57,6 @@ export default async function NewRecipePage({
               Couldn&apos;t find a recipe at that link. Fill it in below instead.
             </p>
           )}
-          {imageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- external preview only
-            <img src={imageUrl} alt="" className="size-28 rounded-md object-cover" />
-          )}
         </CardContent>
       </Card>
 
@@ -69,11 +65,11 @@ export default async function NewRecipePage({
         <Card className="[--card-spacing:--spacing(6)]">
           <CardContent>
             <input type="hidden" name="sourceType" value={field(params.sourceType) ?? "manual"} />
-            <input type="hidden" name="imageUrl" value={imageUrl ?? ""} />
             <RecipeFields
               defaults={{
                 title: field(params.title),
                 sourceUrl: field(params.sourceUrl),
+                imageUrl,
                 ingredients: field(params.ingredients),
                 steps: field(params.steps),
                 notes: field(params.notes),
