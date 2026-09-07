@@ -120,6 +120,8 @@ Three tables, deliberately flat (`db/schema.ts`):
 | `app/components/search-box.tsx` | the live search input | `"use client"`, debounced `router.replace` |
 | `app/components/rating-stars.tsx` | the detail-page star rating | `"use client"`, optimistic |
 | `components/star-row.tsx` | read-only stars on list cards | plain component |
+| `app/components/tag-input.tsx` | the recipe form tag combobox | `"use client"` |
+| `components/tag-pill.tsx` | colour-per-tag pill + `tagColorClasses` helper | plain component |
 | `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); redirects to `/login` without a valid cookie |
 | `app/globals.css` | Tailwind entry + shadcn theme tokens (fuchsia-purple primary, `.text-brand` gradient, `--font-heading` = Bricolage Grotesque) | (not Next specific) |
 | `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
@@ -147,6 +149,8 @@ because it needs real browser state.
   stays newline-joined text.
 - `app/components/rating-stars.tsx`: 1-5 star rating on the detail page, hover preview plus
   an optimistic update, same shape as the want-to-make toggle.
+- `app/components/tag-input.tsx`: the recipe form tag combobox (filter, create, removable
+  pills). Selected tags become hidden `<input name="tag">`s the Server Action reads.
 - The delete button has no "are you sure?" confirmation on purpose: a `confirm()` dialog
   would need another Client Component for a marginal gain. Left as a plain form-button.
 
