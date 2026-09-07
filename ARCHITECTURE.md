@@ -28,7 +28,7 @@ the server/client boundary, and the caching model.
   paste an Instagram URL (oEmbed caption + thumbnail), or type it in by hand. Any capture
   that fails falls back to an empty form.
 - **A recipe** has: title, source URL and type, an image, ingredients and steps (freeform
-  text, one per line), notes, tags, and a "want to make" flag.
+  text, one per line), notes, tags, a "want to make" flag, and a 1-5 rating.
 - **List view** at `/`: a card grid, newest first, filter by tag, live search by title.
   Filter and search state live entirely in the URL.
 - **Detail, edit, delete** for each recipe.
@@ -42,7 +42,8 @@ Three tables, deliberately flat (`db/schema.ts`):
 
 - **`recipe`**: one row per recipe. `ingredients` and `steps` are plain `text` columns, one
   item per line, *not* their own tables. Normalising the ingredient graph (units,
-  substitutions) is a real problem and explicitly out of scope here.
+  substitutions) is a real problem and explicitly out of scope here. `want_to_make` (bool)
+  and `rating` (nullable int) are added as the app grew.
 - **`tag`**: one row per tag name, unique. A tag exists once and is pointed at, so renaming
   or listing all tags is a single-row operation.
 - **`recipe_tag`**: the join table. Each row is one `(recipe_id, tag_id)` pairing, composite
