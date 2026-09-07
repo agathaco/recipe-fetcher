@@ -18,7 +18,7 @@ export default async function LoginPage({
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-4 py-12">
       <Card className="[--card-spacing:--spacing(6)]">
         <CardHeader>
-          <CardTitle>recipe-fetcher</CardTitle>
+          <CardTitle className="text-brand text-xl">recipe-fetcher</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={login} className="space-y-4">

@@ -54,76 +54,82 @@ html {
   scrollbar-gutter: stable;
 }
 
-/* "Fresh market" theme: clean near-white ground, a confident herb green as the
-   primary, warm amber as the accent, a chunky grotesque for headings. Higher
-   chroma than the old warm-paper look, which read muted and generic. */
+/* Vibrant theme: a cool near-white ground (no warmth), a vivid magenta primary
+   and a warm orange, the two ends of the Instagram gradient. High chroma on
+   purpose, the earlier warm-paper look read as no palette at all. */
 :root {
-  --background: oklch(0.986 0.006 95);
-  --foreground: oklch(0.22 0.014 75);
+  --background: oklch(0.985 0.003 270);
+  --foreground: oklch(0.17 0.012 280);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.014 75);
+  --card-foreground: oklch(0.17 0.012 280);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.014 75);
-  --primary: oklch(0.52 0.115 152);
-  --primary-foreground: oklch(0.985 0.02 130);
-  --secondary: oklch(0.955 0.016 110);
-  --secondary-foreground: oklch(0.3 0.02 120);
-  --muted: oklch(0.955 0.014 100);
-  --muted-foreground: oklch(0.48 0.02 90);
-  --accent: oklch(0.93 0.055 80);
-  --accent-foreground: oklch(0.42 0.1 62);
-  --destructive: oklch(0.55 0.2 27);
-  --border: oklch(0.9 0.012 100);
-  --input: oklch(0.9 0.012 100);
-  --ring: oklch(0.52 0.115 152);
-  --chart-1: oklch(0.52 0.115 152);
-  --chart-2: oklch(0.7 0.15 65);
-  --chart-3: oklch(0.55 0.13 25);
-  --chart-4: oklch(0.62 0.12 260);
-  --chart-5: oklch(0.6 0.13 320);
-  --radius: 0.75rem;
-  --sidebar: oklch(0.978 0.008 100);
-  --sidebar-foreground: oklch(0.22 0.014 75);
-  --sidebar-primary: oklch(0.52 0.115 152);
-  --sidebar-primary-foreground: oklch(0.985 0.02 130);
-  --sidebar-accent: oklch(0.93 0.055 80);
-  --sidebar-accent-foreground: oklch(0.42 0.1 62);
-  --sidebar-border: oklch(0.9 0.012 100);
-  --sidebar-ring: oklch(0.52 0.115 152);
+  --popover-foreground: oklch(0.17 0.012 280);
+  --primary: oklch(0.6 0.25 355);
+  --primary-foreground: oklch(0.99 0.012 340);
+  --secondary: oklch(0.955 0.006 280);
+  --secondary-foreground: oklch(0.27 0.02 285);
+  --muted: oklch(0.955 0.005 280);
+  --muted-foreground: oklch(0.47 0.015 280);
+  --accent: oklch(0.955 0.006 280);
+  --accent-foreground: oklch(0.27 0.02 285);
+  --destructive: oklch(0.55 0.21 25);
+  --border: oklch(0.91 0.005 280);
+  --input: oklch(0.91 0.005 280);
+  --ring: oklch(0.6 0.25 355);
+  --chart-1: oklch(0.6 0.25 355);
+  --chart-2: oklch(0.72 0.19 45);
+  --chart-3: oklch(0.55 0.22 300);
+  --chart-4: oklch(0.65 0.18 200);
+  --chart-5: oklch(0.6 0.2 140);
+  --radius: 0.9rem;
+  --brand-from: oklch(0.55 0.24 300);
+  --brand-mid: oklch(0.62 0.26 355);
+  --brand-to: oklch(0.74 0.19 55);
+  --sidebar: oklch(0.985 0.003 270);
+  --sidebar-foreground: oklch(0.17 0.012 280);
+  --sidebar-primary: oklch(0.6 0.25 355);
+  --sidebar-primary-foreground: oklch(0.99 0.012 340);
+  --sidebar-accent: oklch(0.955 0.006 280);
+  --sidebar-accent-foreground: oklch(0.27 0.02 285);
+  --sidebar-border: oklch(0.91 0.005 280);
+  --sidebar-ring: oklch(0.6 0.25 355);
 }
 
 .dark {
-  --background: oklch(0.2 0.012 150);
-  --foreground: oklch(0.94 0.01 100);
-  --card: oklch(0.238 0.014 150);
-  --card-foreground: oklch(0.94 0.01 100);
-  --popover: oklch(0.238 0.014 150);
-  --popover-foreground: oklch(0.94 0.01 100);
-  --primary: oklch(0.66 0.13 150);
-  --primary-foreground: oklch(0.17 0.03 150);
-  --secondary: oklch(0.285 0.014 150);
-  --secondary-foreground: oklch(0.94 0.01 100);
-  --muted: oklch(0.285 0.014 150);
-  --muted-foreground: oklch(0.7 0.016 100);
-  --accent: oklch(0.36 0.05 78);
-  --accent-foreground: oklch(0.9 0.09 80);
-  --destructive: oklch(0.65 0.19 25);
-  --border: oklch(1 0.02 150 / 12%);
-  --input: oklch(1 0.02 150 / 15%);
-  --ring: oklch(0.66 0.13 150);
-  --chart-1: oklch(0.66 0.13 150);
-  --chart-2: oklch(0.72 0.15 65);
-  --chart-3: oklch(0.62 0.14 25);
-  --chart-4: oklch(0.68 0.12 260);
-  --chart-5: oklch(0.66 0.13 320);
-  --sidebar: oklch(0.238 0.014 150);
-  --sidebar-foreground: oklch(0.94 0.01 100);
-  --sidebar-primary: oklch(0.66 0.13 150);
-  --sidebar-primary-foreground: oklch(0.17 0.03 150);
-  --sidebar-accent: oklch(0.36 0.05 78);
-  --sidebar-accent-foreground: oklch(0.9 0.09 80);
-  --sidebar-border: oklch(1 0.02 150 / 12%);
-  --sidebar-ring: oklch(0.66 0.13 150);
+  --background: oklch(0.16 0.012 285);
+  --foreground: oklch(0.96 0.005 280);
+  --card: oklch(0.205 0.014 285);
+  --card-foreground: oklch(0.96 0.005 280);
+  --popover: oklch(0.205 0.014 285);
+  --popover-foreground: oklch(0.96 0.005 280);
+  --primary: oklch(0.68 0.24 355);
+  --primary-foreground: oklch(0.16 0.03 350);
+  --secondary: oklch(0.26 0.014 285);
+  --secondary-foreground: oklch(0.96 0.005 280);
+  --muted: oklch(0.26 0.014 285);
+  --muted-foreground: oklch(0.7 0.015 280);
+  --accent: oklch(0.26 0.014 285);
+  --accent-foreground: oklch(0.96 0.005 280);
+  --destructive: oklch(0.65 0.2 25);
+  --border: oklch(1 0.01 285 / 12%);
+  --input: oklch(1 0.01 285 / 15%);
+  --ring: oklch(0.68 0.24 355);
+  --chart-1: oklch(0.68 0.24 355);
+  --chart-2: oklch(0.74 0.19 45);
+  --chart-3: oklch(0.62 0.22 300);
+  --chart-4: oklch(0.68 0.18 200);
+  --chart-5: oklch(0.66 0.2 140);
+  --brand-from: oklch(0.6 0.24 300);
+  --brand-mid: oklch(0.66 0.26 355);
+  --brand-to: oklch(0.76 0.19 55);
+  --sidebar: oklch(0.205 0.014 285);
+  --sidebar-foreground: oklch(0.96 0.005 280);
+  --sidebar-primary: oklch(0.68 0.24 355);
+  --sidebar-primary-foreground: oklch(0.16 0.03 350);
+  --sidebar-accent: oklch(0.26 0.014 285);
+  --sidebar-accent-foreground: oklch(0.96 0.005 280);
+  --sidebar-border: oklch(1 0.01 285 / 12%);
+  --sidebar-ring: oklch(0.68 0.24 355);
 }
 
 @layer base {
@@ -141,5 +147,28 @@ html {
     font-family: var(--font-heading);
     font-weight: 600;
     letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  /* The Instagram-style brand gradient, for the app title. */
+  .text-brand {
+    background-image: linear-gradient(
+      100deg,
+      var(--brand-from),
+      var(--brand-mid) 48%,
+      var(--brand-to)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .bg-brand {
+    background-image: linear-gradient(
+      100deg,
+      var(--brand-from),
+      var(--brand-mid) 48%,
+      var(--brand-to)
+    );
   }
 }
