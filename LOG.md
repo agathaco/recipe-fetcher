@@ -162,3 +162,9 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   and joins with newlines, so the `text` columns and the detail page are unchanged. Form
   regrouped into cards (Recipe / Ingredients / Steps / Notes and links). DECISIONS entry
   written. Drew on NYT Cooking / Whisk / Tandoor editors (Paprika itself is textarea-based).
+- **UI v3 (07/09):** the fresh-market theme still wasn't it. Now: cool near-white background
+  (no warm tint at all), vivid magenta primary + orange, a `.text-brand` gradient (Instagram
+  style) on the app title, radius bumped to 0.9rem. The recipe list is now a **card grid**
+  (`sm:grid-cols-2 lg:grid-cols-3`), image-forward, 4:3 hero, `UtensilsCrossed` placeholder
+  when there's no image, and the want-to-make star as a circular overlay in the card corner
+  (new `compact` prop on the toggle). Favicon is now a purple/pink/orange gradient.
