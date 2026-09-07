@@ -195,3 +195,18 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   Detail + filter pills stay links. Removed the leftover `test` and unused `soup` tags.
 - Tested: existing tags pre-select on edit, create/dedup/lowercase on submit, new categories
   are created. The dropdown interaction itself needs a browser.
+
+## Tests (07/09)
+
+- **Vitest + RTL** (`@vitejs/plugin-react-swc`, jsdom, native tsconfig-paths): 34 unit /
+  component tests. `capture.ts` parsing (the code with real bugs), `auth.ts` digest,
+  `tagColorClasses`, and the client components (`RowsEditor`, `TagInput`, `WantToMakeToggle`,
+  `RatingStars`, the last two with the Server Action mocked). `npm test` / `npm run test:run`.
+- **Playwright** (`channel: "chrome"`, because bundled Chromium needs macOS 13+): 4 E2E specs
+  against a production build. Auth gate + login; add / view / edit / delete a recipe; live
+  search. Data is prefixed `e2e-` and a global teardown deletes it. `npm run test:e2e`.
+- **CI** (`.github/workflows/ci.yml`): a `unit` job (lint + typecheck + Vitest, no secrets)
+  and an `e2e` job (Playwright, needs `DATABASE_URL` and `APP_PASSWORD` repo secrets).
+- Decided on Vitest + Playwright rather than Vitest alone: Next's own docs say `async` Server
+  Components can't be unit tested, and those are the point of the project. DECISIONS entry
+  written; the shared test DB is flagged as the weak spot.

@@ -76,19 +76,26 @@ not a reason to skip it, the value is in testing the *integration*, not the flow
 Cypress would each be a step backwards from tools I already use or that have clearly won.
 
 **What gets tested where:**
-- Vitest: `capture.ts` JSON-LD parsing (it had real bugs), `auth.ts` digest, the
-  form-data helpers, `tagColorClasses`, and the five client components.
-- Playwright: the auth gate, add / view / edit / delete a recipe, search filtering. Runs
-  against a dedicated Neon branch so the tests hit a real Postgres without touching my data.
+- Vitest: `capture.ts` JSON-LD parsing (it had real bugs), `auth.ts` digest,
+  `tagColorClasses`, and the client components (`RowsEditor`, `TagInput`, the toggle, the
+  rating). 34 tests.
+- Playwright: the auth gate, add / view / edit / delete a recipe, live search. Runs against
+  a production build (`next build && next start`, no dev-compile flake) and hits the real
+  dev database. Every test names its data `e2e-...` and a global teardown deletes anything
+  matching, so a crashed run leaves at most one stray recipe.
 
-**What I'd revisit this under:** if the app grew a genuinely complex multi-step flow (a
-wizard, a checkout), that's where Playwright coverage would need to get deliberate rather
-than smoke-level. Also worth adding: a couple of integration tests of the Server Actions
-against the test database, sitting between the unit and E2E layers.
+**On the test database:** ideally E2E gets a dedicated Neon branch. It doesn't yet, because
+the `neon-http` driver can't talk to a local Postgres and setting up a branch is a manual
+step I skipped for now. The prefix-and-teardown approach is the pragmatic version and it is
+safe enough for a solo app. This is the weakest part of the setup and the first thing I'd
+harden.
 
-**Confidence:** high on the tool split. Less sure yet about the test-database setup being
-the cleanest option (a Neon branch is simple but slower than a local Postgres would be, and
-the `neon-http` driver can't talk to a local Postgres without a driver change).
+**What I'd revisit this under:** a genuinely complex multi-step flow would need deliberate
+Playwright coverage rather than smoke tests. A middle layer is also missing: integration
+tests of the Server Actions against a test database, between the unit and E2E layers.
+
+**Confidence:** high on the tool split (Vitest can't do async Server Components, so
+Playwright isn't optional). Medium on the test-DB approach, as above.
 
 ---
 

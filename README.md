@@ -60,11 +60,27 @@ on.
 |---|---|
 | `npm run dev` | dev server |
 | `npm run build` | production build (also catches type errors) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Vitest, watch mode |
+| `npm run test:run` | Vitest, once |
+| `npm run test:e2e` | Playwright end-to-end (builds and serves the app) |
 | `npm run db:generate` | generate a new SQL migration from `db/schema.ts` |
 | `npm run db:migrate` | apply pending migrations |
 | `npm run db:push` | push schema straight to the DB, dev only, skips migration files |
 | `npm run db:studio` | open Drizzle Studio |
 | `npm run db:seed` | wipe and reseed sample data |
+
+## Testing
+
+- **Vitest + React Testing Library** for the pure helpers (`capture.ts` parsing, `auth.ts`)
+  and the client components.
+- **Playwright** for the flows that only work end to end (auth, add/edit/delete, search),
+  since Vitest can't render `async` Server Components. It runs against a production build and
+  the real database; test data is prefixed `e2e-` and cleaned up on teardown.
+- Playwright uses the installed Google Chrome (`channel: "chrome"`); its bundled Chromium
+  needs macOS 13+.
+- CI (`.github/workflows/ci.yml`) runs lint, typecheck, and both suites. The E2E job needs
+  `DATABASE_URL` and `APP_PASSWORD` as repository secrets.
 
 ## Layout
 
