@@ -28,15 +28,19 @@ Out of scope per SPEC: OCR / reading text off a recipe image, reel transcription
 
 ## UI / UX
 
-- Adopt a component library (deciding: shadcn/ui) and redo the forms and list with it.
-- Fix the page-width shift between filters (scrollbar gutter).
-- Show the recipe image on the detail page (and maybe list); `imageUrl` is stored but never
-  rendered.
-- Wider, friendlier add/edit forms.
-- Render `steps` as markdown / numbered list instead of a text blob.
-- Dark mode.
+Done: shadcn/ui adopted and themed (warm palette + Fraunces), width shift fixed, images
+shown on list + detail, steps as a numbered list, row-based ingredient/step editors,
+favicon, live search.
+
+Still open:
+- Drag-to-reorder ingredient / step rows (needs a dnd library).
+- Ingredient section headers ("For the sauce", "For the topping").
+- Check off ingredients on the detail page as you cook (Paprika does this).
+- Highlight the current step on the detail page.
+- Dark mode toggle (`.dark` tokens already exist).
 - Mobile pass.
 - Better empty states.
+- A sticky "Save" bar on the long form.
 
 ## Features
 
