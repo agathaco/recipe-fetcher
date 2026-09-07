@@ -10,7 +10,6 @@ import { getAllTagNames } from "@/app/lib/data";
 import { param } from "@/app/lib/params";
 
 export const metadata = { title: "Add a recipe" };
-export const dynamic = "force-dynamic";
 
 export default async function NewRecipePage({
   searchParams,

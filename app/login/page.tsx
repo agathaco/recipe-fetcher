@@ -5,7 +5,6 @@ import { Label } from "@/components/ui/label";
 import { login } from "@/app/lib/actions";
 
 export const metadata = { title: "Sign in" };
-export const dynamic = "force-dynamic";
 
 export default async function LoginPage({
   searchParams,

@@ -249,3 +249,9 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   `rating-stars.test.tsx`. 37 passing.
 - DECISIONS.md: "Error handling: three layers, not one catch-all". ARCHITECTURE.md: new
   "Error handling" section + touchpoint rows.
+
+## force-dynamic hoisted to the layout (07/09)
+
+- Was `export const dynamic = "force-dynamic"` in all 5 page files; now one copy in
+  `app/layout.tsx`, which cascades to every route. Same behavior (build output still shows
+  every route as `ƒ`), less repetition, nothing to keep in sync. ARCHITECTURE.md updated.

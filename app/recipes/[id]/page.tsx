@@ -11,8 +11,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { deleteRecipe } from "@/app/lib/actions";
 import { getRecipeById } from "@/app/lib/data";
 
-export const dynamic = "force-dynamic";
-
 export async function generateMetadata({
   params,
 }: {

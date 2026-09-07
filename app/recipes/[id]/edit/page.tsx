@@ -6,8 +6,6 @@ import { RecipeForm } from "@/components/recipe-form";
 import { updateRecipe } from "@/app/lib/actions";
 import { getAllTagNames, getRecipeById } from "@/app/lib/data";
 
-export const dynamic = "force-dynamic";
-
 export default async function EditRecipePage({
   params,
 }: {

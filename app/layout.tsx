@@ -17,6 +17,12 @@ const heading = Bricolage_Grotesque({
   weight: ["500", "600", "700"],
 });
 
+// Every page reads live data from Postgres, which Next can't detect (it only
+// watches fetch(), not a Drizzle call), so it would otherwise freeze pages at
+// build time. Setting this on the root layout opts the whole app out of static
+// rendering in one place. See DECISIONS.md "force-dynamic over cache-plus-revalidate".
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: {
     default: "Recipes",

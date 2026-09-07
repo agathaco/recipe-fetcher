@@ -13,8 +13,6 @@ import { logout } from "@/app/lib/actions";
 import { getAllTagNames, getRecipes } from "@/app/lib/data";
 import { param } from "@/app/lib/params";
 
-export const dynamic = "force-dynamic";
-
 function filterHref(tag: string | undefined, q: string | undefined): string {
   const params = new URLSearchParams();
   if (tag) params.set("tag", tag);

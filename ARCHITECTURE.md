@@ -191,12 +191,13 @@ Three layers, matching the three ways things fail:
 
 ## Caching
 
-Every route sets `export const dynamic = "force-dynamic"`: no route-level caching, every
-request re-renders from the database. This was a deliberate choice (see DECISIONS): the
-alternative, letting pages cache by default and busting them with `revalidatePath` after
-each mutation, is faster but relies on never missing a `revalidatePath` call. The mutations
-do still call `revalidatePath` on the routes they affect, so switching to the cached model
-later is mostly a matter of removing the `force-dynamic` exports.
+`app/layout.tsx` sets `export const dynamic = "force-dynamic"` once, which cascades to every
+route: no route-level caching, every request re-renders from the database. This was a
+deliberate choice (see DECISIONS): the alternative, letting pages cache by default and
+busting them with `revalidatePath` after each mutation, is faster but relies on never
+missing a `revalidatePath` call. The mutations do still call `revalidatePath` on the routes
+they affect, so switching to the cached model later is mostly a matter of removing that one
+export.
 
 ## How it maps to Vercel
 
@@ -219,7 +220,7 @@ if unset, the gate is disabled and the app is public).
 | 1-2 | `metadata` export | `app/layout.tsx` | static `<title>` and `<meta>` |
 | UI pass | `app/icon.svg` file convention | `app/icon.svg` | drop an SVG in and Next injects the favicon `<link>`, no config |
 | 3 | Server Component data fetching | `app/page.tsx` | `async` component queries the DB on the server, no `/api` route |
-| 3 | Route segment config | `app/page.tsx` | `export const dynamic = "force-dynamic"` |
+| 3 | Route segment config | `app/layout.tsx` | `export const dynamic = "force-dynamic"`, set once on the root layout, cascades to every route |
 | 3 | Dynamic route | `app/recipes/[id]/` | `[id]` segment, `params` is a Promise |
 | 3 | `generateMetadata` | `app/recipes/[id]/page.tsx` | per-recipe `<title>` |
 | 3 | `notFound()` | `app/recipes/[id]/page.tsx` | render the 404 UI for a missing recipe |
