@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { RecipeFields } from "@/components/recipe-fields";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createRecipe, importFromUrl } from "@/app/lib/actions";
 
@@ -62,24 +62,20 @@ export default async function NewRecipePage({
 
       {/* Plain form + Server Action: submits even with JS disabled. */}
       <form action={createRecipe} className="mt-6">
-        <Card className="[--card-spacing:--spacing(6)]">
-          <CardContent>
-            <input type="hidden" name="sourceType" value={field(params.sourceType) ?? "manual"} />
-            <RecipeFields
-              defaults={{
-                title: field(params.title),
-                sourceUrl: field(params.sourceUrl),
-                imageUrl,
-                ingredients: field(params.ingredients),
-                steps: field(params.steps),
-                notes: field(params.notes),
-              }}
-            />
-          </CardContent>
-          <CardFooter>
-            <Button type="submit">Save recipe</Button>
-          </CardFooter>
-        </Card>
+        <input type="hidden" name="sourceType" value={field(params.sourceType) ?? "manual"} />
+        <RecipeFields
+          defaults={{
+            title: field(params.title),
+            sourceUrl: field(params.sourceUrl),
+            imageUrl,
+            ingredients: field(params.ingredients),
+            steps: field(params.steps),
+            notes: field(params.notes),
+          }}
+        />
+        <div className="mt-6">
+          <Button type="submit">Save recipe</Button>
+        </div>
       </form>
     </main>
   );

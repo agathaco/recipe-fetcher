@@ -51,6 +51,40 @@ in my own words. Checked means the entry is written.
 
 ---
 
+## Ingredient and step editing: one row per item, not a textarea
+
+**Date:** 07/09/2026
+
+**Context:** The add and edit forms had a single tall textarea each for ingredients and
+steps. It works, but it gives no structure and no guidance, and nothing stops a stray blank
+line or a pasted blob. Recipe apps (NYT Cooking's editor, Whisk, Tandoor) present each item
+as its own row.
+
+**Options I considered:**
+- Keep the textarea, one item per line by convention
+- One `<input>` per item, with add / remove buttons and a per-item placeholder
+
+**Chose:** the row editor.
+
+**Why:** it makes the shape explicit (this many ingredients, this many steps), the first row
+carries a real example as a placeholder, steps are numbered as you type, and blank rows
+can't sneak into the data. The DB doesn't change: `ingredients` and `steps` are still `text`
+columns. Each row is an `<input name="ingredient">`, the Server Action reads them with
+`formData.getAll("ingredient")`, trims, drops blanks, and joins with newlines, so storage
+and the detail page are untouched.
+
+The cost: add / remove is dynamic form state, so `RowsEditor` is a Client Component (the
+app's third). It still degrades: without JS the existing rows render and submit, you just
+can't add or remove.
+
+**What I'd revisit this under:** wanting drag-to-reorder (needs a dnd library), ingredient
+section headers ("For the sauce"), or treating an ingredient as structured data (quantity /
+unit / name), which is project 2's territory.
+
+**Confidence:** high.
+
+---
+
 ## Live debounced search, still URL-backed
 
 **Date:** 06/09/2026

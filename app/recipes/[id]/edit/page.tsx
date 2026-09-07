@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 
 import { RecipeFields } from "@/components/recipe-fields";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { updateRecipe } from "@/app/lib/actions";
 import { getRecipeById } from "@/app/lib/data";
 
@@ -35,25 +34,21 @@ export default async function EditRecipePage({
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">Edit recipe</h1>
 
       <form action={updateThisRecipe} className="mt-6">
-        <Card className="[--card-spacing:--spacing(6)]">
-          <CardContent>
-            <RecipeFields
-              defaults={{
-                title: recipe.title,
-                sourceUrl: recipe.sourceUrl ?? undefined,
-                imageUrl: recipe.imageUrl ?? undefined,
-                ingredients: recipe.ingredients ?? undefined,
-                steps: recipe.steps ?? undefined,
-                notes: recipe.notes ?? undefined,
-                tags: recipe.tags.join(", "),
-                wantToMake: recipe.wantToMake,
-              }}
-            />
-          </CardContent>
-          <CardFooter>
-            <Button type="submit">Save changes</Button>
-          </CardFooter>
-        </Card>
+        <RecipeFields
+          defaults={{
+            title: recipe.title,
+            sourceUrl: recipe.sourceUrl ?? undefined,
+            imageUrl: recipe.imageUrl ?? undefined,
+            ingredients: recipe.ingredients ?? undefined,
+            steps: recipe.steps ?? undefined,
+            notes: recipe.notes ?? undefined,
+            tags: recipe.tags.join(", "),
+            wantToMake: recipe.wantToMake,
+          }}
+        />
+        <div className="mt-6">
+          <Button type="submit">Save changes</Button>
+        </div>
       </form>
     </main>
   );

@@ -22,6 +22,18 @@ function strOrNull(value: FormDataEntryValue | null): string | null {
   return s === "" ? null : s;
 }
 
+// The ingredient / step row editors submit one field per row, all with the same
+// name. Collapse each row to a single line, drop blanks, join with newlines,
+// which is the shape the `text` column stores and the detail page splits back.
+function linesFromRows(formData: FormData, name: string): string | null {
+  const joined = formData
+    .getAll(name)
+    .map((v) => String(v).replace(/\s*\n\s*/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+  return joined === "" ? null : joined;
+}
+
 // Replaces a recipe's whole tag set with the comma-separated list from the
 // form. Delete-then-reinsert is the simplest correct way to handle removals:
 // a tag left out of the input should stop being linked to this recipe.
@@ -68,8 +80,8 @@ export async function createRecipe(formData: FormData) {
       sourceUrl: strOrNull(formData.get("sourceUrl")),
       sourceType: strOrNull(formData.get("sourceType")) ?? "manual",
       imageUrl: strOrNull(formData.get("imageUrl")),
-      ingredients: strOrNull(formData.get("ingredients")),
-      steps: strOrNull(formData.get("steps")),
+      ingredients: linesFromRows(formData, "ingredient"),
+      steps: linesFromRows(formData, "step"),
       notes: strOrNull(formData.get("notes")),
       wantToMake: formData.get("wantToMake") === "on",
     })
@@ -97,8 +109,8 @@ export async function updateRecipe(id: string, formData: FormData) {
       title,
       sourceUrl: strOrNull(formData.get("sourceUrl")),
       imageUrl: strOrNull(formData.get("imageUrl")),
-      ingredients: strOrNull(formData.get("ingredients")),
-      steps: strOrNull(formData.get("steps")),
+      ingredients: linesFromRows(formData, "ingredient"),
+      steps: linesFromRows(formData, "step"),
       notes: strOrNull(formData.get("notes")),
       wantToMake: formData.get("wantToMake") === "on",
     })

@@ -123,7 +123,8 @@ Three tables, deliberately flat (`db/schema.ts`):
 | `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); redirects to `/login` without a valid cookie |
 | `app/globals.css` | Tailwind entry + shadcn theme tokens (warm palette, `--font-heading` serif) | (not Next specific) |
 | `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
-| `components/recipe-fields.tsx` | the field layout shared by the add and edit forms | plain component, no state |
+| `components/recipe-fields.tsx` | the card sections shared by the add and edit forms | plain component |
+| `components/rows-editor.tsx` | add/remove row list for ingredients and steps | `"use client"`, submits repeated same-named inputs |
 | `db/index.ts` | Drizzle client | server-only module, imported by Server Components/Actions |
 | `db/schema.ts` | Table definitions and relations | (Drizzle, not Next) |
 | `db/seed.mts` | Dev seed script | plain script, run with `tsx`, not part of the app |
@@ -131,8 +132,8 @@ Three tables, deliberately flat (`db/schema.ts`):
 
 ## The server/client boundary
 
-Almost everything runs on the server. Two Client Components are the exceptions, and both
-earn it by the same test: a per-interaction delay a user would notice.
+Almost everything runs on the server. Three Client Components are the exceptions, each
+because it needs real browser state.
 
 - The database client, the connection string, and all query and mutation logic stay
   server-side and never reach the browser bundle.
@@ -141,6 +142,9 @@ earn it by the same test: a per-interaction delay a user would notice.
 - `app/components/search-box.tsx` (`useSearchParams` + `useRouter` + a debounce): filters
   live on each keystroke. It still writes the query to the URL and the server still does the
   filtering, so it is a thin client shell over the same URL-as-state model.
+- `components/rows-editor.tsx`: add / remove rows in the ingredient and step editors. Each
+  row is a same-named input; the Server Action reads them with `formData.getAll()`. Storage
+  stays newline-joined text.
 - The delete button has no "are you sure?" confirmation on purpose: a `confirm()` dialog
   would need another Client Component for a marginal gain. Left as a plain form-button.
 

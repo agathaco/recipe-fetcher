@@ -154,3 +154,9 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   DECISIONS entry written. Spinner in the input during the transition.
 - **Image URL field:** was only settable via import; now a visible field in the shared form
   (`components/recipe-fields.tsx`), with a preview, saved on both create and edit.
+- **Row-based ingredient/step editing:** the two big textareas replaced with
+  `components/rows-editor.tsx` (3rd Client Component): one input per item, add/remove
+  buttons, per-item placeholder, numbered steps. Server Action reads `formData.getAll()`
+  and joins with newlines, so the `text` columns and the detail page are unchanged. Form
+  regrouped into cards (Recipe / Ingredients / Steps / Notes and links). DECISIONS entry
+  written. Drew on NYT Cooking / Whisk / Tandoor editors (Paprika itself is textarea-based).
