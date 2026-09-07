@@ -143,9 +143,11 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
 - Backlog in `IDEAS.md`: AI features (auto-tag, semantic search, caption parsing), search
   debounce, dark mode, more.
 - **Theming:** stock zinc looked too generic for a recipe app. Themed it via CSS variables
-  only ("warm paper + terracotta" palette, warm-tinted neutrals, burnt-orange primary) plus
-  Fraunces serif for headings. No component changes. DECISIONS entry updated with the
-  follow-up. `.dark` tokens are set for a future toggle but nothing enables dark mode yet.
+  only. First attempt was "warm paper + terracotta" + Fraunces, which still read too
+  "AI-default" (low chroma, sepia, editorial serif). Second attempt (07/09): "fresh market",
+  herb-green primary, amber accent, cleaner near-white, higher chroma, Bricolage Grotesque
+  for headings. Favicon recoloured to match. `.dark` tokens updated too but no toggle yet.
+  DECISIONS entry has both follow-ups.
 - **Favicon:** replaced the scaffold `app/favicon.ico` with `app/icon.svg`, a whisk on a
   terracotta square. Next's `app/icon.svg` file convention injects the `<link>` automatically.
 - **Live search:** `app/components/search-box.tsx`, the app's 2nd Client Component. Debounced

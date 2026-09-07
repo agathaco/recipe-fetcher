@@ -121,7 +121,7 @@ Three tables, deliberately flat (`db/schema.ts`):
 | `app/components/want-to-make-toggle.tsx` | the toggle button | `"use client"`, `useOptimistic` |
 | `app/components/search-box.tsx` | the live search input | `"use client"`, debounced `router.replace` |
 | `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); redirects to `/login` without a valid cookie |
-| `app/globals.css` | Tailwind entry + shadcn theme tokens (warm palette, `--font-heading` serif) | (not Next specific) |
+| `app/globals.css` | Tailwind entry + shadcn theme tokens ("fresh market" palette: herb-green primary, amber accent; `--font-heading` = Bricolage Grotesque) | (not Next specific) |
 | `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
 | `components/recipe-fields.tsx` | the card sections shared by the add and edit forms | plain component |
 | `components/rows-editor.tsx` | add/remove row list for ingredients and steps | `"use client"`, submits repeated same-named inputs |

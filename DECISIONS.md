@@ -145,15 +145,18 @@ project where the UI is not the goal.
 defaults are deliberately neutral, so a shadcn app looks like every other shadcn app until
 you invest in restyling it.
 
-**Follow-up (06/09/2026):** the stock zinc theme did look too generic for a recipe app, so
-I themed it: a "warm paper + terracotta" palette (neutrals carry a slight warm hue, the
-primary is a burnt orange-red) and a serif (Fraunces) for headings. This is all CSS
-variables in `globals.css` plus one font in `layout.tsx`, no component changes, which is
-exactly the point of picking a token-themed library. shadcn gave the structure, the theme
-gave the personality.
+**Follow-up (06/09/2026):** the stock zinc theme looked too generic, so I themed it "warm
+paper + terracotta" with a Fraunces serif for headings.
 
-**Confidence:** high. The library choice was right; the "generic is fine" line was wrong,
-and cheap to fix.
+**Follow-up 2 (07/09/2026):** that first theme was still too safe. Low-chroma terracotta on
+sepia-tinted white, plus Fraunces, is close to the current "AI-generated" default look.
+Went bolder: a "fresh market" palette (a confident herb green as the primary, warm amber as
+the accent, cleaner near-white ground, higher chroma overall) and Bricolage Grotesque, a
+chunky grotesque, for headings instead of the editorial serif. Still CSS variables plus one
+font, no component changes.
+
+**Confidence:** high on the library. The theme took two tries, which is the real lesson:
+"just theme it" is cheap, but a timid palette reads as no palette.
 
 ---
 
