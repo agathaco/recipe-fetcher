@@ -7,13 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createRecipe, importFromUrl } from "@/app/lib/actions";
 import { getAllTagNames } from "@/app/lib/data";
+import { param } from "@/app/lib/params";
 
 export const metadata = { title: "Add a recipe" };
 export const dynamic = "force-dynamic";
-
-function field(value: string | string[] | undefined): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
 
 export default async function NewRecipePage({
   searchParams,
@@ -21,8 +18,8 @@ export default async function NewRecipePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const importFailed = field(params.importFailed) === "1";
-  const imageUrl = field(params.imageUrl);
+  const importFailed = param(params.importFailed) === "1";
+  const imageUrl = param(params.imageUrl);
   const allTags = await getAllTagNames();
 
   return (
@@ -64,16 +61,16 @@ export default async function NewRecipePage({
 
       {/* Plain form + Server Action: submits even with JS disabled. */}
       <form action={createRecipe} className="mt-6">
-        <input type="hidden" name="sourceType" value={field(params.sourceType) ?? "manual"} />
+        <input type="hidden" name="sourceType" value={param(params.sourceType) ?? "manual"} />
         <RecipeFields
           allTags={allTags}
           defaults={{
-            title: field(params.title),
-            sourceUrl: field(params.sourceUrl),
+            title: param(params.title),
+            sourceUrl: param(params.sourceUrl),
             imageUrl,
-            ingredients: field(params.ingredients),
-            steps: field(params.steps),
-            notes: field(params.notes),
+            ingredients: param(params.ingredients),
+            steps: param(params.steps),
+            notes: param(params.notes),
           }}
         />
         <div className="mt-6">

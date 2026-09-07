@@ -210,3 +210,23 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
 - Decided on Vitest + Playwright rather than Vitest alone: Next's own docs say `async` Server
   Components can't be unit tested, and those are the point of the project. DECISIONS entry
   written; the shared test DB is flagged as the weak spot.
+
+## Code review + cleanup pass (07/09)
+
+- **Open redirect in `login`**: `?from=` was passed straight to `redirect()`, so
+  `/login?from=//evil.com` bounced off-site. Now only same-origin paths pass
+  (`from.startsWith("/") && !from.startsWith("//")`), else `/`.
+- **Detail page queried the DB twice**: `generateMetadata` and the page body both
+  call `getRecipeById`. Wrapped it in `React.cache` so it's one query per request.
+- **Proxy matcher** now also excludes `/icon.svg` (was being auth-gated).
+- **`importFromUrl`** no longer redirects to a bare `/recipes/new?` when nothing
+  was captured.
+- **Capture fetches** got an 8s `AbortSignal.timeout` so a slow site can't hang the
+  action.
+- **`field()` searchParams helper** was copy-pasted in two pages; extracted to
+  `app/lib/params.ts` as `param()`.
+- **Dropped `Geist_Mono`**: loaded in the layout and wired to `--font-mono` but
+  never used. Removed the font, the CSS variable, and the leftover `flex flex-col`
+  on `<body>`.
+- Left for a later pass: SSRF in `captureFromWebUrl`, no `error.tsx` boundary, no
+  CHECK constraint on `rating`, `TagInput` missing full ARIA combobox roles.

@@ -11,12 +11,9 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { logout } from "@/app/lib/actions";
 import { getAllTagNames, getRecipes } from "@/app/lib/data";
+import { param } from "@/app/lib/params";
 
 export const dynamic = "force-dynamic";
-
-function field(value: string | string[] | undefined): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
 
 function filterHref(tag: string | undefined, q: string | undefined): string {
   const params = new URLSearchParams();
@@ -32,8 +29,8 @@ export default async function HomePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const tag = field(params.tag);
-  const q = field(params.q);
+  const tag = param(params.tag);
+  const q = param(params.q);
 
   const [allRecipes, allTags] = await Promise.all([
     getRecipes({ tag, q }),

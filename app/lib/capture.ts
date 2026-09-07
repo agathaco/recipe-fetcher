@@ -100,6 +100,7 @@ export async function captureFromWebUrl(url: string): Promise<CapturedRecipe | n
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; recipe-fetcher/0.1)" },
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
 
@@ -129,7 +130,10 @@ export async function captureFromInstagramUrl(url: string): Promise<CapturedReci
     // commonly requires an approved app token. This is left calling the
     // plain endpoint on purpose: it is expected to fail more often than not,
     // which is exactly the case the fallback ladder exists for.
-    const res = await fetch(`https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`);
+    const res = await fetch(
+      `https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`,
+      { signal: AbortSignal.timeout(8000) },
+    );
     if (!res.ok) return null;
 
     const data = (await res.json()) as { title?: string; thumbnail_url?: string };

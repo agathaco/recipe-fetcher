@@ -150,7 +150,9 @@ export async function login(formData: FormData) {
     maxAge: 60 * 60 * 24 * 30, // 30 days
   });
 
-  redirect(from.startsWith("/") ? from : "/");
+  // Only same-origin paths. "//evil.com" starts with "/" but is an external URL.
+  const safeFrom = from.startsWith("/") && !from.startsWith("//") ? from : "/";
+  redirect(safeFrom);
 }
 
 export async function logout() {
@@ -209,5 +211,6 @@ export async function importFromUrl(formData: FormData) {
 
   // redirect() throws internally, so it must run outside any try/catch.
   // Catching it here would swallow the redirect instead of performing it.
-  redirect(`/recipes/new?${params.toString()}`);
+  const qs = params.toString();
+  redirect(qs ? `/recipes/new?${qs}` : "/recipes/new");
 }

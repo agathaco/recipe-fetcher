@@ -2,12 +2,15 @@
 // Mirrors actions.ts (the write side) but has no "use server": these are plain
 // functions called directly during render, not invoked over the network.
 
-import { and, desc, eq, ilike } from "drizzle-orm";
+import { desc, eq, ilike } from "drizzle-orm";
+import { cache } from "react";
 
 import { db } from "@/db";
 import { recipeTags, recipes, tags } from "@/db/schema";
 
-export async function getRecipeById(id: string) {
+// Wrapped in React.cache so the detail page's generateMetadata and the page
+// body share one query per request instead of hitting the DB twice.
+export const getRecipeById = cache(async (id: string) => {
   // id is a uuid column; a malformed id makes Postgres throw. Treat that the
   // same as "not found" rather than crashing the page.
   try {
@@ -24,7 +27,7 @@ export async function getRecipeById(id: string) {
   } catch {
     return null;
   }
-}
+});
 
 export async function getAllTagNames(): Promise<string[]> {
   const rows = await db.select({ name: tags.name }).from(tags).orderBy(tags.name);
@@ -37,20 +40,16 @@ export async function getRecipes(filters: {
   tag?: string;
   q?: string;
 }): Promise<RecipeWithTags[]> {
-  // The search term applies to the base `recipe` row, so it goes straight into
-  // SQL as a WHERE clause. ILIKE = case-insensitive LIKE, a Postgres extension.
-  const conditions = filters.q ? [ilike(recipes.title, `%${filters.q}%`)] : [];
-
-  // Manual join instead of the relational query API here: a LEFT JOIN fans
-  // out to one row per (recipe, tag) pair, which is exactly what filtering by
-  // tag needs to reason about, but the query API's `where` can't easily
-  // filter on a nested relation. Grouped back into one row per recipe below.
+  // Manual join instead of the relational query API: a LEFT JOIN fans out to
+  // one row per (recipe, tag) pair, grouped back into one row per recipe below.
+  // The search term is on the base `recipe` row so it goes straight into SQL as
+  // an ILIKE (case-insensitive LIKE); the tag filter is applied after grouping.
   const rows = await db
     .select({ recipe: recipes, tagName: tags.name })
     .from(recipes)
     .leftJoin(recipeTags, eq(recipeTags.recipeId, recipes.id))
     .leftJoin(tags, eq(tags.id, recipeTags.tagId))
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(filters.q ? ilike(recipes.title, `%${filters.q}%`) : undefined)
     .orderBy(desc(recipes.createdAt));
 
   const byId = new Map<string, RecipeWithTags>();
@@ -62,14 +61,10 @@ export async function getRecipes(filters: {
       byId.set(row.recipe.id, { ...row.recipe, tags: row.tagName ? [row.tagName] : [] });
     }
   }
-  let result = Array.from(byId.values());
+  const result = Array.from(byId.values());
 
-  // Filtering by tag happens in JS, after grouping: doing it in the SQL WHERE
-  // clause would drop the *other* tags of a matching recipe, since the join
-  // produces one row per tag and the filter would remove all but the matching one.
-  if (filters.tag) {
-    result = result.filter((r) => r.tags.includes(filters.tag!));
-  }
-
-  return result;
+  // Filter by tag in JS, after grouping. A SQL WHERE on the tag would drop the
+  // matching recipe's *other* tags, since the join produces one row per tag.
+  const wantedTag = filters.tag;
+  return wantedTag ? result.filter((r) => r.tags.includes(wantedTag)) : result;
 }

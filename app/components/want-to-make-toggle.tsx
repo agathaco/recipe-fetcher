@@ -1,8 +1,7 @@
 "use client";
 
-// The one Client Component in this app. Everything else is a Server Component
-// with zero client JS; this exists purely because a toggle needs to feel
-// instant, and that requires state that lives in the browser.
+// A toggle needs to feel instant, so it holds optimistic state in the browser
+// and calls the Server Action directly. One of the few Client Components here.
 
 import { Star } from "lucide-react";
 import { useOptimistic, useTransition } from "react";
