@@ -152,3 +152,5 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   (250ms) `router.replace` on each keystroke, so the list filters live but the query stays in
   the URL and the DB still does the filtering. Plain GET form kept as the no-JS fallback.
   DECISIONS entry written. Spinner in the input during the transition.
+- **Image URL field:** was only settable via import; now a visible field in the shared form
+  (`components/recipe-fields.tsx`), with a preview, saved on both create and edit.
