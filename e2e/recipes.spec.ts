@@ -24,8 +24,14 @@ test("add, view, edit and delete a recipe", async ({ page }) => {
 
   await page.getByRole("link", { name: "Edit" }).click();
   await page.getByLabel("Title").fill(`${title}-v2`);
+  // Swap the tag: this exercises the diff in setRecipeTags (one removed, one added).
+  await page.getByRole("button", { name: "Remove e2e-tag" }).click();
+  await page.getByLabel("Add tags").fill("e2e-tag2");
+  await page.getByRole("button", { name: /^Create/ }).click();
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("heading", { name: `${title}-v2` })).toBeVisible();
+  await expect(page.getByRole("link", { name: "e2e-tag2" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "e2e-tag", exact: true })).toHaveCount(0);
 
   // Delete now asks for confirmation via a native dialog.
   page.once("dialog", (dialog) => dialog.accept());

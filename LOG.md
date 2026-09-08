@@ -255,3 +255,17 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
 - Was `export const dynamic = "force-dynamic"` in all 5 page files; now one copy in
   `app/layout.tsx`, which cascades to every route. Same behavior (build output still shows
   every route as `ƒ`), less repetition, nothing to keep in sync. ARCHITECTURE.md updated.
+
+## setRecipeTags rewritten as an atomic diff (08/09)
+
+- Was: delete every `recipe_tag` row for the recipe, then re-insert the whole set in a loop
+  with one `INSERT` per tag. Three problems: N+1, a brief window where the recipe had no
+  tags, and no atomicity (neon-http runs single statements, so a mid-loop failure left a
+  partial set).
+- Now: bulk-upsert the tag names (one statement), read their ids back (one `SELECT ... IN`),
+  then `db.batch([delete stale links, insert new links])`. Neon runs a batch as one
+  transaction. Unchanged links are never touched, so no empty window; round trips are fixed
+  at 3 regardless of tag count.
+- E2E `recipes.spec.ts` now swaps a tag on the edit step (remove one, add one) to exercise
+  the diff. All tests green.
+- Came out of interview-prep Q12/Q16. Updated both answers.

@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -43,33 +43,51 @@ function linesFromRows(formData: FormData, name: string): string | null {
   return joined === "" ? null : joined;
 }
 
-// Replaces a recipe's whole tag set with the list from the tag combobox (one
-// hidden <input name="tag"> per selected tag). Delete-then-reinsert is the
-// simplest correct way to handle removals: a tag left out should stop being
-// linked to this recipe.
+// Makes a recipe's tag links match `rawNames` exactly (one hidden
+// <input name="tag"> per tag in the combobox). Written as a diff, not a
+// wipe-and-refill: unchanged links stay put, so the recipe is never briefly
+// tagless and a save that didn't touch tags writes nothing. Round trips are
+// fixed at three regardless of tag count, and the two link-table writes go
+// through db.batch(), which Neon runs as a single transaction.
 async function setRecipeTags(recipeId: string, rawNames: string[]) {
   const names = Array.from(
     new Set(rawNames.map((name) => name.trim().toLowerCase()).filter(Boolean)),
   );
 
-  await db.delete(recipeTags).where(eq(recipeTags.recipeId, recipeId));
-  if (names.length === 0) return;
-
-  // Find-or-create each tag, then link it. One recipe has only a handful of
-  // tags, so a few small queries here stays simple and readable; this would
-  // be worth batching into fewer round trips if that ever stopped being true.
-  for (const name of names) {
-    const [tag] = await db
-      .insert(tags)
-      .values({ name })
-      .onConflictDoNothing({ target: tags.name })
-      .returning();
-
-    const tagId = tag?.id ?? (await db.select().from(tags).where(eq(tags.name, name)))[0]?.id;
-    if (!tagId) continue;
-
-    await db.insert(recipeTags).values({ recipeId, tagId }).onConflictDoNothing();
+  if (names.length === 0) {
+    await db.delete(recipeTags).where(eq(recipeTags.recipeId, recipeId));
+    return;
   }
+
+  // One bulk upsert instead of an INSERT per tag: create the names that are new,
+  // ignore the ones that already exist, then read back the ids for the whole set.
+  await db
+    .insert(tags)
+    .values(names.map((name) => ({ name })))
+    .onConflictDoNothing({ target: tags.name });
+
+  const rows = await db
+    .select({ id: tags.id })
+    .from(tags)
+    .where(inArray(tags.name, names));
+  const tagIds = rows.map((r) => r.id);
+
+  await db.batch([
+    // Drop only the links this save removed; leave the rest untouched.
+    db
+      .delete(recipeTags)
+      .where(
+        and(
+          eq(recipeTags.recipeId, recipeId),
+          notInArray(recipeTags.tagId, tagIds),
+        ),
+      ),
+    // Add the links this save introduced; ON CONFLICT skips the ones already there.
+    db
+      .insert(recipeTags)
+      .values(tagIds.map((tagId) => ({ recipeId, tagId })))
+      .onConflictDoNothing(),
+  ]);
 }
 
 // Signature is (prevState, formData) so it can back a `useActionState` form.
