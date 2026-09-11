@@ -209,6 +209,14 @@ everything reads the DB, cookies, or `searchParams`, so all routes render on dem
 Two env vars are needed in Vercel: `DATABASE_URL` (Neon) and `APP_PASSWORD` (the auth gate;
 if unset, the gate is disabled and the app is public).
 
+**Migrations.** Vercel builds run whatever `package.json` names `vercel-build` instead of the
+default `build` script, if that script exists. This project's `vercel-build` runs
+`db:migrate` first, but only when `$VERCEL_ENV = production` (Vercel sets that automatically;
+it's `preview` on PR/branch deploys), then `next build`. Preview deploys never touch the
+database, since there's one shared Neon instance, not per-branch databases. If the migration
+fails, the build fails and the bad deploy never goes live. Before this, migrations were a
+manual `npm run db:migrate` run by hand against the shared connection string; see DECISIONS.
+
 ---
 
 ## Next.js features, as they were introduced

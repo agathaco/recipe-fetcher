@@ -256,6 +256,23 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   `app/layout.tsx`, which cascades to every route. Same behavior (build output still shows
   every route as `ƒ`), less repetition, nothing to keep in sync. ARCHITECTURE.md updated.
 
+## Migrations run on the production build (11/09)
+
+- `package.json`: new `vercel-build` script. Vercel uses that instead of `build` when it's
+  present. Runs `db:migrate` first, but only when `$VERCEL_ENV = production` (unset locally
+  and on preview deploys), then `next build`. A failed migration now fails the build, so a
+  bad deploy never goes live.
+- Replaces the manual step (`npm run db:migrate` run by hand against the shared connection
+  string) that got the `rating` column into production. Considered a GitHub Actions step
+  instead; rejected because it fires independently of Vercel's own git-triggered deploy and
+  so can't actually gate anything.
+- Verified locally: `npm run vercel-build` with no `VERCEL_ENV` set (matches local/preview)
+  skips `db:migrate` and runs a clean production build. The production-gated branch
+  (`db:migrate` actually running) is unverified in this pass, first real test is the next
+  push to `main`.
+- Came out of writing the honest Q18 interview answer. ARCHITECTURE.md ("How it maps to
+  Vercel") and DECISIONS.md updated.
+
 ## setRecipeTags rewritten as an atomic diff (08/09)
 
 - Was: delete every `recipe_tag` row for the recipe, then re-insert the whole set in a loop

@@ -50,6 +50,50 @@ in my own words. Checked means the entry is written.
 - [x] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
 - [x] Testing: Vitest for units, Playwright for the RSC / Server Action flows
 - [x] Error handling: `error.tsx` boundary, `useActionState` for forms, toasts for optimistic actions
+- [x] How migrations reach production: `vercel-build` gated on `VERCEL_ENV`, not a manual step
+
+---
+
+## Migrations run on the production build, not by hand
+
+**Date:** 11/09/2026
+
+**Context:** `db:migrate` was a step I ran locally, against the one shared Neon connection
+string, whenever the schema changed. It worked (see the `rating` column, migration
+`0001_wet_callisto`) only because there's a single Neon database and I remembered to run it.
+Vercel's own build never touches the database, deploying new code and migrating the schema
+are two unrelated actions that happened to both be "things I do after changing the schema."
+Came out of writing the Q18 interview answer and not liking the honest version of it.
+
+**Options I considered:**
+- Keep it manual: cheapest, but silent-failure risk if I forget, and it's the actual gap the
+  interview question is pointing at.
+- A GitHub Actions step on push to `main` that runs `db:migrate`: reuses the `DATABASE_URL`
+  secret already in CI for e2e. Problem: it's not ordered against Vercel's own git-triggered
+  deploy, both fire independently off the same push, so it doesn't actually gate anything,
+  the deploy can go live before or after the migration finishes.
+- Run migrations inside the Vercel build itself, via the `vercel-build` package.json
+  convention (Vercel uses that script instead of `build` when it's present), gated to only
+  run on production builds.
+
+**Chose:** the `vercel-build` script, gated on `VERCEL_ENV === "production"`.
+
+**Why:** it's the only option that actually orders the two steps, migrate then build then
+deploy, in the same process, so a failed migration fails the build and the bad deploy never
+goes live. Gating on `VERCEL_ENV` matters because preview deployments (every branch push,
+every PR) would otherwise run `db:migrate` against the single shared production database on
+every preview build, since this project has no per-branch database. No extra secrets needed:
+`DATABASE_URL` is already a Vercel project env var.
+
+**What I'd revisit this under:** adding a real staging database (Neon branching would give
+one per PR for free), at which point I'd want preview builds to migrate *their own* branch
+DB rather than skip migrating entirely, and I'd drop the `VERCEL_ENV` gate.
+
+**Confidence:** medium. The build-gating logic is sound and I can defend it, but it's
+**not yet verified against a real Vercel build** with a pending migration, that only happens
+on the next push to `main`. Less sure about the shell conditional's portability if Vercel
+ever changes its build image; a small Node script would be more robust than inline
+`if [ ... ]` and is the obvious next iteration if this gets more elaborate.
 
 ---
 
