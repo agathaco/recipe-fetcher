@@ -1,8 +1,11 @@
-// Shared by proxy.ts (runs on the Edge runtime) and the login action (Node).
-// Uses only Web Crypto and TextEncoder, both of which exist in both runtimes,
-// so there is one implementation instead of two.
+// Shared by proxy.ts (runs on the Edge runtime) and the login/logout actions
+// (Node). Uses only Web Crypto, which exists in both runtimes, so there is one
+// implementation instead of two.
 
 export const AUTH_COOKIE = "rf_auth";
+
+// How long a session stays valid, in both the `session` row and the cookie.
+export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // SHA-256 of the input, as a hex string.
 export async function sha256Hex(input: string): Promise<string> {
@@ -13,14 +16,18 @@ export async function sha256Hex(input: string): Promise<string> {
     .join("");
 }
 
-// The value the auth cookie should hold when signed in: the digest of the
-// configured password. Storing the digest, not the password, means a leaked
-// cookie does not hand over the secret in plaintext (it can still be replayed,
-// which is an accepted tradeoff for a one-person app).
-// Returns null when no password is configured, e.g. local dev before .env is set,
-// which the proxy treats as "gate disabled".
-export async function expectedAuthCookie(): Promise<string | null> {
-  const secret = process.env.APP_PASSWORD;
-  if (!secret) return null;
-  return sha256Hex(secret);
+// A random, unguessable session token: 32 bytes (256 bits) from the platform's
+// CSPRNG, hex-encoded. This is the value that goes in the cookie.
+export function randomToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// The `session` table stores SHA-256(token), never the raw token, so a leaked
+// table (a DB backup, a misconfigured export) hands out hashes that can't be
+// turned back into a cookie someone could replay, same reasoning as hashing
+// the password instead of storing it.
+export function sessionId(token: string): Promise<string> {
+  return sha256Hex(token);
 }

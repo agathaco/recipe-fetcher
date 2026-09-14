@@ -43,6 +43,9 @@ export default async function EditRecipePage({
           notes: recipe.notes ?? undefined,
           tags: recipe.tags,
           wantToMake: recipe.wantToMake,
+          prepTime: recipe.prepTime ?? undefined,
+          cookTime: recipe.cookTime ?? undefined,
+          ovenTemp: recipe.ovenTemp ?? undefined,
         }}
       />
     </main>

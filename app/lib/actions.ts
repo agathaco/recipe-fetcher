@@ -5,9 +5,11 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { del } from "@vercel/blob";
+
 import { db } from "@/db";
-import { recipeTags, recipes, tags } from "@/db/schema";
-import { AUTH_COOKIE, sha256Hex } from "@/app/lib/auth";
+import { recipeImages, recipeTags, recipes, sessions, tags } from "@/db/schema";
+import { AUTH_COOKIE, SESSION_TTL_MS, randomToken, sessionId } from "@/app/lib/auth";
 import { captureFromInstagramUrl, captureFromWebUrl, isInstagramUrl } from "@/app/lib/capture";
 
 // Everything in this file runs only on the server. It is imported by forms and
@@ -110,6 +112,9 @@ export async function createRecipe(
         ingredients: linesFromRows(formData, "ingredient"),
         steps: linesFromRows(formData, "step"),
         notes: strOrNull(formData.get("notes")),
+        prepTime: strOrNull(formData.get("prepTime")),
+        cookTime: strOrNull(formData.get("cookTime")),
+        ovenTemp: strOrNull(formData.get("ovenTemp")),
         wantToMake: formData.get("wantToMake") === "on",
       })
       .returning();
@@ -147,6 +152,9 @@ export async function updateRecipe(
         ingredients: linesFromRows(formData, "ingredient"),
         steps: linesFromRows(formData, "step"),
         notes: strOrNull(formData.get("notes")),
+        prepTime: strOrNull(formData.get("prepTime")),
+        cookTime: strOrNull(formData.get("cookTime")),
+        ovenTemp: strOrNull(formData.get("ovenTemp")),
         wantToMake: formData.get("wantToMake") === "on",
       })
       .where(eq(recipes.id, id));
@@ -171,9 +179,27 @@ export async function deleteRecipe(id: string) {
   redirect("/");
 }
 
+// Called directly from PhotoGallery's onClick/onChange after the browser has
+// already uploaded the file straight to Blob storage (a client upload, see
+// app/api/upload/route.ts): this just records the resulting URL. Errors
+// propagate; the client catches them and shows a toast, same pattern as
+// toggleWantToMake/setRating.
+export async function addRecipeImage(recipeId: string, url: string) {
+  await db.insert(recipeImages).values({ recipeId, url });
+  revalidatePath(`/recipes/${recipeId}`);
+}
+
+export async function deleteRecipeImage(imageId: string, recipeId: string, url: string) {
+  await del(url);
+  await db.delete(recipeImages).where(eq(recipeImages.id, imageId));
+  revalidatePath(`/recipes/${recipeId}`);
+}
+
 // The login form on /login posts here. One shared password, compared against
-// APP_PASSWORD. On success, set a cookie holding the password's digest; the
-// proxy checks incoming requests against that same value.
+// APP_PASSWORD. On success, issue a random session token: the raw token goes
+// in the cookie, only its hash is stored server-side in `session`. The proxy
+// looks the hashed cookie value up on every request, so a session can be
+// revoked (logout, or an expiry sweep) without touching any other session.
 export async function login(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const from = str(formData.get("from"));
@@ -183,13 +209,19 @@ export async function login(formData: FormData) {
     redirect(`/login?error=1${from ? `&from=${encodeURIComponent(from)}` : ""}`);
   }
 
+  const token = randomToken();
+  await db.insert(sessions).values({
+    id: await sessionId(token),
+    expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+  });
+
   const store = await cookies();
-  store.set(AUTH_COOKIE, await sha256Hex(secret), {
+  store.set(AUTH_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: SESSION_TTL_MS / 1000,
   });
 
   // Only same-origin paths. "//evil.com" starts with "/" but is an external URL.
@@ -197,8 +229,14 @@ export async function login(formData: FormData) {
   redirect(safeFrom);
 }
 
+// Deletes this device's session row, so only this cookie stops working.
+// Other devices signed in with the same shared password are unaffected.
 export async function logout() {
   const store = await cookies();
+  const token = store.get(AUTH_COOKIE)?.value;
+  if (token) {
+    await db.delete(sessions).where(eq(sessions.id, await sessionId(token)));
+  }
   store.delete(AUTH_COOKIE);
   redirect("/login");
 }

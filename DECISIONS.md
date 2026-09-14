@@ -51,6 +51,153 @@ in my own words. Checked means the entry is written.
 - [x] Testing: Vitest for units, Playwright for the RSC / Server Action flows
 - [x] Error handling: `error.tsx` boundary, `useActionState` for forms, toasts for optimistic actions
 - [x] How migrations reach production: `vercel-build` gated on `VERCEL_ENV`, not a manual step
+- [x] Real sessions instead of a static password-digest cookie
+- [x] Pulling the want-to-make marker off the list cards with no replacement yet
+- [x] Photo uploads: Vercel Blob, client-direct, via a Route Handler
+
+---
+
+## Photo uploads: Vercel Blob, client-direct, via a Route Handler
+
+**Date:** 11/09/2026
+
+**Context:** Wanted an actual drag-and-drop photo gallery on the detail page, not another
+paste-a-URL field. That means real file storage, something this app has never needed before.
+
+**Options I considered:**
+- **Multiple pasted URLs instead of real uploads**: zero new infrastructure, but isn't what
+  was asked for, still just linking to photos hosted somewhere else.
+- **Store files in Postgres** (bytea column): no new service, but Neon isn't built for
+  serving binary blobs and this is exactly the wrong tool, cheapest to set up, worst fit.
+- **Vercel Blob**: pairs natively with Vercel hosting, a small SDK, free at this app's scale
+  (checked the actual numbers: 5GB storage / 100GB transfer per month on the free Hobby
+  tier, thousands of photos' worth for a personal collection).
+
+**Chose:** Vercel Blob, uploaded **client-direct** (browser straight to Blob storage) via a
+Route Handler that only mints a short-lived upload token, not a Server Action that receives
+the file itself.
+
+**Why client-direct over a Server Action:** a Server Action has a request body size limit
+(1MB by default); phone photos routinely exceed that. Client-direct upload means the file
+never passes through a serverless function at all, so there's no size ceiling to configure
+or hit. It's also a genuine, correctly-motivated use of a Route Handler rather than a Server
+Action, the caller here is `@vercel/blob/client`'s browser SDK, not this app's own UI, which
+is exactly the "when you'd need a Route Handler" case from the Server-Actions-vs-Route-
+Handlers decision.
+
+**Why no `onUploadCompleted` webhook:** `@vercel/blob/client`'s recommended pattern includes
+an optional webhook Vercel calls back once the upload finishes, useful if the browser might
+disconnect mid-upload. I skipped it: it needs a publicly reachable callback URL, which can't
+reach `localhost` during local dev, so relying on it would mean the feature silently doesn't
+work until deployed. Instead, the client calls a Server Action directly once its own
+`upload()` promise resolves, same direct-invoke pattern already used for
+`toggleWantToMake`/`setRating`. Simpler, and it actually works locally.
+
+**Why a separate `recipe_image` table, not replacing `recipe.imageUrl`:** the card grid
+already reads `imageUrl` as a single cover image; keeping it separate meant this feature
+touched none of that, no risk to the list page. Uploading a gallery photo doesn't
+automatically become the cover, that's still an explicit "Image URL" field edit. A bit of
+duplication (two ways to attach an image to a recipe) in exchange for a much smaller,
+lower-risk change.
+
+**What I'd revisit this under:** if "set as cover" from the gallery turns out to be wanted
+enough to be worth the extra wiring, or if upload volume ever approached the Hobby free-tier
+limits (it won't, for a personal collection).
+
+**Confidence:** high. Verified end to end, 12/09: a real `upload()` call through
+`/api/upload`, into Blob storage, `addRecipeImage`'s exact DB write, then confirmed rendered
+on the detail page, then deleted (blob + row) and confirmed both gone. One real snag along
+the way: the first Blob store got created as **private** by default, and `access: "public"`
+(needed since photos render as plain `<img src>`, no per-request auth) isn't allowed against
+a private store, and unlike most store settings this one **can't be changed after creation**
+(confirmed against Vercel's docs) — had to delete that store and create a new one as public.
+Worth remembering for next time: pick the access mode deliberately at creation, it's a
+one-way door.
+
+---
+
+## Pulling the want-to-make marker, no replacement yet
+
+**Date:** 11/09/2026
+
+**Context:** The list redesign (wider grid, flat cards) removed the corner star button that
+toggled "want to make" on each card. It didn't come out of a bug or a real problem with the
+old marker, it came out of not having a clear answer for what it should look like in a
+flatter, wider, more image-forward grid, the old circular star-over-photo button was
+designed for the previous denser 3-column card, and a photo-overlay button reads as visual
+noise here, especially sitting next to the 1-5 rating stars it could be confused with.
+
+**Options I considered:**
+- Keep the old overlay button as-is: fastest, but it's the thing that doesn't fit the new
+  design, keeping it would mean shipping a redesign with one deliberately unaddressed piece.
+- Guess at a replacement now (a badge, a corner ribbon, a checkmark): possible, but I don't
+  have a real opinion yet on whether "want to make" should even be a per-card marker at all,
+  versus, say, a filter/view instead of a visible badge on every card.
+- Remove it from the card entirely, keep the underlying feature (the `toggleWantToMake`
+  action, the `wantToMake` column, the detail-page toggle) untouched, and treat "what the
+  marker looks like" as its own open question.
+
+**Chose:** remove it from the cards, keep everything else.
+
+**Why:** shipping "no marker yet" is more honest than shipping a guess I'd likely redo. The
+data model and the Server Action didn't need to change at all, this is purely a display
+decision, which is exactly the kind of thing that's cheap to defer and expensive to get
+wrong twice.
+
+**What I'd revisit this under:** once there's an actual opinion on the interaction, options
+range from a small corner badge to a dedicated "want to make" filter view (parallel to the
+tag filter) instead of a per-card marker at all.
+
+**Confidence:** medium-high on "removing it beats guessing", low on what actually replaces
+it, that's the open question, tracked in IDEAS.md, not this entry.
+
+---
+
+## Real sessions, not a static cookie
+
+**Date:** 11/09/2026
+
+**Context:** The auth cookie held `SHA-256(APP_PASSWORD)`, a single fixed value with no
+server-side record of who's signed in or from where. It came out of writing the honest Q20
+interview answer: every device that ever logged in holds the identical cookie value forever,
+there's no way to revoke one without changing the shared password (which revokes every
+device at once), and there's no expiry beyond the cookie's own `maxAge`.
+
+**Options I considered:**
+- Leave it: defensible for a single-user toy, and I'd already named it as a deliberate,
+  understood tradeoff (Q20).
+- Full auth library (Auth.js/Lucia): real identity, per-account hashing, the library owns
+  sessions. Rejected as scope creep against this project's own line, single-user was a
+  deliberate simplification (Q3), and this is what I'd reach for the day there's a second
+  user (Q22), not before.
+- Server-side sessions, still one shared password: a `session` table holding
+  `SHA-256(token) → expiresAt`; login issues a random token, puts the raw token in the
+  cookie, stores only its hash. `proxy.ts` looks the hashed cookie up on every request.
+
+**Chose:** server-side sessions, one shared password unchanged.
+
+**Why:** it fixes the actual, specific gap, revocation and expiry, without changing what the
+app's auth *model* is. The password check, the single-user framing, and `proxy.ts` as the
+one enforcement point are all untouched. Storing the token's hash rather than the raw token
+mirrors the reasoning that already justified digesting the password (Q19): a leaked `session`
+table can't be replayed into a live cookie.
+
+**What I gave up:** `proxy.ts` now does a DB read on every request, previously it was pure
+hash comparison, zero I/O. That's a real cost, but it's the same posture the rest of the app
+already takes (`force-dynamic`, every page queries Postgres on every view), so it's
+consistent rather than a new kind of tradeoff. Expired rows are only swept lazily, on the
+next request that presents that exact expired cookie, so a session nobody ever revisits with
+its old cookie lingers in the table until something bothers to clean it up. No scheduled
+sweep, and no "sign out everywhere" button, though the latter would just be
+`db.delete(sessions)` if I wanted it later.
+
+**What I'd revisit this under:** a second real user (then it's Auth.js, per Q22), or if the
+per-request DB read in `proxy.ts` ever showed up as a real latency cost.
+
+**Confidence:** high. Migration applied, exercised end to end (via curl, real form POST
+including the `$ACTION_ID_...` field Next embeds for a no-JS-capable Server Action form,
+not a shortcut): login sets a real session cookie, `/` and a recipe detail page both render
+with it, logout deletes the row and re-gates immediately. 11/09.
 
 ---
 

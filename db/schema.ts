@@ -22,6 +22,12 @@ export const recipes = pgTable("recipe", {
   ingredients: text("ingredients"), // freeform, one per line
   steps: text("steps"), // freeform / markdown
   notes: text("notes"),
+  // Freeform text, not structured minutes/degrees, same call as ingredients/
+  // steps: "20 min" vs "PT20M", "180C fan" vs "356" all need to just work, and
+  // parsing/normalising units is the project-2 problem, not this one's.
+  prepTime: text("prep_time"),
+  cookTime: text("cook_time"),
+  ovenTemp: text("oven_temp"),
   wantToMake: boolean("want_to_make").notNull().default(false),
   rating: integer("rating"), // 1-5, or null for unrated
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -32,9 +38,33 @@ export const recipes = pgTable("recipe", {
     .$onUpdate(() => new Date()),
 });
 
+// Server-side login sessions. `id` is SHA-256(token), never the raw token, so
+// the cookie (which holds the raw token) is the only place the live credential
+// exists, same reasoning as hashing the password. Replaces a static
+// digest-of-the-password cookie that never expired and couldn't be revoked
+// per-device (see DECISIONS: "Real sessions, not a static cookie").
+export const sessions = pgTable("session", {
+  id: text("id").primaryKey(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
 export const tags = pgTable("tag", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
+});
+
+// A recipe's photo gallery: one-to-many, separate from `recipe.imageUrl`
+// (the pasted/captured cover image shown on cards) on purpose. Uploading a
+// gallery photo doesn't change the card thumbnail, that stays a deliberate,
+// explicit choice via the Image URL field.
+export const recipeImages = pgTable("recipe_image", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  recipeId: uuid("recipe_id")
+    .notNull()
+    .references(() => recipes.id, { onDelete: "cascade" }),
+  url: text("url").notNull(), // Vercel Blob URL
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const recipeTags = pgTable(
@@ -53,6 +83,14 @@ export const recipeTags = pgTable(
 // Relations let the Drizzle query API walk recipe -> tags without hand-written joins.
 export const recipesRelations = relations(recipes, ({ many }) => ({
   recipeTags: many(recipeTags),
+  images: many(recipeImages),
+}));
+
+export const recipeImagesRelations = relations(recipeImages, ({ one }) => ({
+  recipe: one(recipes, {
+    fields: [recipeImages.recipeId],
+    references: [recipes.id],
+  }),
 }));
 
 export const tagsRelations = relations(tags, ({ many }) => ({

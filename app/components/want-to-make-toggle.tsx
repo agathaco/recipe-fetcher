@@ -13,13 +13,9 @@ import { toggleWantToMake } from "@/app/lib/actions";
 export function WantToMakeToggle({
   recipeId,
   initialValue,
-  compact = false,
 }: {
   recipeId: string;
   initialValue: boolean;
-  // compact = circular icon button, for the corner of a recipe card.
-  // default = labelled pill, for the detail page.
-  compact?: boolean;
 }) {
   const [optimisticValue, setOptimisticValue] = useOptimistic(initialValue);
   const [, startTransition] = useTransition();
@@ -34,28 +30,6 @@ export function WantToMakeToggle({
         toast.error("Couldn't update this recipe. Try again.");
       }
     });
-  }
-
-  const label = optimisticValue ? "Remove from want to make" : "Add to want to make";
-
-  if (compact) {
-    return (
-      <button
-        type="button"
-        onClick={handleClick}
-        aria-pressed={optimisticValue}
-        aria-label={label}
-        title={label}
-        className={cn(
-          "flex size-8 items-center justify-center rounded-full backdrop-blur transition",
-          optimisticValue
-            ? "bg-primary text-primary-foreground hover:opacity-90"
-            : "bg-black/40 text-white hover:bg-black/60",
-        )}
-      >
-        <Star className={cn("size-4", optimisticValue && "fill-current")} />
-      </button>
-    );
   }
 
   return (

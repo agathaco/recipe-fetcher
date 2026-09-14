@@ -29,30 +29,49 @@ the server/client boundary, and the caching model.
   that fails falls back to an empty form.
 - **A recipe** has: title, source URL and type, an image, ingredients and steps (freeform
   text, one per line), notes, tags, a "want to make" flag, and a 1-5 rating.
-- **List view** at `/`: a card grid, newest first, filter by tag, live search by title.
-  Filter and search state live entirely in the URL.
-- **Detail, edit, delete** for each recipe.
-- **"Want to make" toggle** and a **1-5 star rating**: both optimistic, instant.
+- **List view** at `/`: a flat card grid, filter by tag, live search by title, sort by date
+  added / name / rating. Filter, search, and sort state live entirely in the URL.
+- **Detail, edit, delete** for each recipe. Detail page shows a prep/cook/oven-temp stat
+  strip (when any are set), a source link labelled with the site's hostname, lets you cross
+  ingredients and steps off as you cook (checked state lives in `localStorage`, not the DB,
+  it's cooking-session state, not recipe data), and a photo gallery you can drag-and-drop
+  more images into (uploaded to Vercel Blob, separate from the one pasted-URL cover image
+  shown on cards).
+- **"Want to make" toggle** (detail page) and a **1-5 star rating** (cards + detail): both
+  optimistic, instant. The toggle isn't shown on the list cards themselves right now, that
+  surface is being redesigned (see LOG).
 - **One-user auth**: a shared password checked in `proxy.ts` before every request.
 - **Deployed** on Vercel with Postgres on Neon.
 
 ## Data model
 
-Three tables, deliberately flat (`db/schema.ts`):
+Five tables, deliberately flat (`db/schema.ts`):
 
 - **`recipe`**: one row per recipe. `ingredients` and `steps` are plain `text` columns, one
   item per line, *not* their own tables. Normalising the ingredient graph (units,
   substitutions) is a real problem and explicitly out of scope here. `want_to_make` (bool)
-  and `rating` (nullable int) are added as the app grew.
+  and `rating` (nullable int) are added as the app grew. `prep_time` / `cook_time` /
+  `oven_temp` are also plain nullable `text`, same call as ingredients/steps: "20 min" and
+  "180C fan" need to just work, parsing/normalising units is project 2's problem.
 - **`tag`**: one row per tag name, unique. A tag exists once and is pointed at, so renaming
   or listing all tags is a single-row operation.
 - **`recipe_tag`**: the join table. Each row is one `(recipe_id, tag_id)` pairing, composite
   primary key, both foreign keys `on delete cascade`. This many-to-many is the one modelling
   concept the project is here to practice: a recipe has many tags, a tag applies to many
   recipes.
+- **`session`**: one row per signed-in device. `id` is `SHA-256(token)`, never the raw token;
+  `expiresAt` is checked, and the row deleted, on the next request that presents an expired
+  cookie (lazy sweep, no scheduled job). Not part of the recipe data model, it exists so auth
+  has somewhere server-side to revoke from; see "Signing in" below.
+- **`recipe_image`**: a recipe's photo gallery, one-to-many, `recipe_id` FK `on delete
+  cascade`, `url` pointing at a Vercel Blob object. Deliberately separate from
+  `recipe.image_url` (the single pasted/captured cover shown on cards): uploading a gallery
+  photo never changes the card thumbnail, that stays an explicit choice via the Image URL
+  field.
 
-`id`s are `uuid` with a database default. `created_at` / `updated_at` are `timestamptz`;
-`updated_at` is bumped by Drizzle on every `update()`, no DB trigger.
+`id`s are `uuid` with a database default, except `session.id`, which is a hash string.
+`created_at` / `updated_at` are `timestamptz`; `updated_at` is bumped by Drizzle on every
+`update()`, no DB trigger.
 
 ## Request lifecycles
 
@@ -94,14 +113,17 @@ Three tables, deliberately flat (`db/schema.ts`):
 
 ### Signing in
 
-1. Any request without a valid `rf_auth` cookie hits `proxy.ts` first, which `redirect`s to
-   `/login?from=<the path they wanted>`.
+1. Any request without a session `proxy.ts` recognizes as valid hits it first, which
+   `redirect`s to `/login?from=<the path they wanted>`.
 2. `/login` shows a password form posting to the `login` Server Action.
 3. `login` compares the submitted password to `APP_PASSWORD`. Wrong: redirect back to
-   `/login?error=1`. Right: set an httpOnly cookie whose value is `SHA-256(APP_PASSWORD)`,
-   then `redirect()` to `from`.
-4. Every later request carries that cookie; `proxy.ts` compares it to the same digest and
-   lets it through. "Sign out" runs the `logout` action, which deletes the cookie.
+   `/login?error=1`. Right: generate a random token, insert a `session` row keyed by
+   `SHA-256(token)` with a 30-day `expiresAt`, and set an httpOnly cookie holding the raw
+   token, then `redirect()` to `from`.
+4. Every later request carries that cookie; `proxy.ts` hashes it and looks the row up in
+   `session`, rejecting if the row is missing or `expiresAt` has passed (deleting it in the
+   latter case). "Sign out" runs the `logout` action, which deletes this device's `session`
+   row by hash, then clears the cookie, so only this device is signed out.
 
 ## File map
 
@@ -116,19 +138,23 @@ Three tables, deliberately flat (`db/schema.ts`):
 | `app/lib/actions.ts` | every mutation: `createRecipe`, `updateRecipe`, `deleteRecipe`, `toggleWantToMake`, `setRating`, `importFromUrl`, `login`, `logout` | Server Actions (`"use server"`), `.bind()`, `revalidatePath`, `redirect`, `cookies()`; `createRecipe`/`updateRecipe` return a `FormState` for `useActionState` |
 | `app/error.tsx` | route-level error boundary | `"use client"`, `error` + `reset` props |
 | `app/global-error.tsx` | root-layout error boundary | `"use client"`, renders its own `<html>`/`<body>` |
-| `app/lib/data.ts` | `getRecipeById`, `getRecipes`, `getAllTagNames` | server-side read helpers; manual join + group-in-JS for the filterable list, Drizzle's relational `with` for the single-recipe read |
+| `app/lib/data.ts` | `getRecipeById`, `getRecipes`, `getAllTagNames` | server-side read helpers; manual join + group-in-JS for the filterable list (sorted in SQL before grouping), Drizzle's relational `with` for the single-recipe read |
 | `app/lib/capture.ts` | `captureFromWebUrl`, `captureFromInstagramUrl` | server-side `fetch` of a third-party page/API, never runs in the browser |
-| `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `expectedAuthCookie` | Web-Crypto only, shared by the Edge proxy and the Node login action |
-| `app/components/want-to-make-toggle.tsx` | the toggle button | `"use client"`, `useOptimistic` |
+| `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `randomToken`, `sessionId` | Web-Crypto only, shared by the Edge proxy and the Node login/logout actions |
+| `app/components/want-to-make-toggle.tsx` | the toggle button (detail page only, for now) | `"use client"`, `useOptimistic` |
 | `app/components/search-box.tsx` | the live search input | `"use client"`, debounced `router.replace` |
+| `app/components/sort-select.tsx` | the list page's sort dropdown | `"use client"`, `useSearchParams` + `router.replace`, plain `<select>` inside the same GET form for the no-JS path |
 | `app/components/rating-stars.tsx` | the detail-page star rating | `"use client"`, optimistic |
 | `components/star-row.tsx` | read-only stars on list cards | plain component |
 | `app/components/tag-input.tsx` | the recipe form tag combobox | `"use client"` |
 | `app/components/delete-recipe-button.tsx` | the detail-page Delete button | `"use client"`, `confirm()` + toast on failure |
 | `components/recipe-form.tsx` | the `<form>` shell around `RecipeFields` for add and edit | `"use client"`, `useActionState`, `useFormStatus` |
+| `components/recipe-checklist.tsx` | cross off ingredients/steps on the detail page | `"use client"`, reads/writes `localStorage` after mount (not the DB), guards against a hydration mismatch by only setting state in an effect |
+| `app/components/photo-gallery.tsx` | the detail-page photo grid + drop zone | `"use client"`, `@vercel/blob/client`'s `upload()`, drag-and-drop + native file input |
+| `app/api/upload/route.ts` | mints upload tokens for `@vercel/blob/client`, one per file | Route Handler, not a Server Action, `@vercel/blob`'s client-upload contract needs a plain HTTP endpoint the browser SDK calls directly |
 | `components/tag-pill.tsx` | colour-per-tag pill + `tagColorClasses` helper | plain component |
 | `components/ui/sonner.tsx` | the toast outlet, mounted once in the layout | `"use client"` |
-| `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); redirects to `/login` without a valid cookie |
+| `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); looks the session up in `session` on every request, redirects to `/login` if missing, unknown, or expired |
 | `app/globals.css` | Tailwind entry + shadcn theme tokens (fuchsia-purple primary, `.text-brand` gradient, `--font-heading` = Bricolage Grotesque) | (not Next specific) |
 | `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
 | `components/recipe-fields.tsx` | the card sections shared by the add and edit forms | plain component |
@@ -146,10 +172,14 @@ each because it needs real browser state or has to react to a failure.
 - The database client, the connection string, and all query and mutation logic stay
   server-side and never reach the browser bundle.
 - `app/components/want-to-make-toggle.tsx` (`useOptimistic` + `useTransition`): flips
-  instantly, before the round trip.
+  instantly, before the round trip. Detail page only right now, see LOG for why it came off
+  the list cards.
 - `app/components/search-box.tsx` (`useSearchParams` + `useRouter` + a debounce): filters
   live on each keystroke. It still writes the query to the URL and the server still does the
   filtering, so it is a thin client shell over the same URL-as-state model.
+- `app/components/sort-select.tsx` (`useSearchParams` + `useRouter`, no debounce needed for a
+  discrete choice): same URL-as-state model as search, sits inside the same GET form so a
+  no-JS submit carries `sort` along with `q` and `tag`.
 - `components/rows-editor.tsx`: add / remove rows in the ingredient and step editors. Each
   row is a same-named input; the Server Action reads them with `formData.getAll()`. Storage
   stays newline-joined text.
@@ -163,6 +193,13 @@ each because it needs real browser state or has to react to a failure.
 - `app/components/delete-recipe-button.tsx`: needs a `confirm()` step and a place to show
   "that didn't work", so the bound `deleteRecipe` action is called from a client `onClick`
   and a thrown error becomes a toast.
+- `components/recipe-checklist.tsx`: cooking progress (which lines are crossed off) is
+  browser-only state read from `localStorage` after mount, deliberately never sent to the
+  server or stored in the DB.
+- `app/components/photo-gallery.tsx`: drag-and-drop needs real DOM events
+  (`onDragOver`/`onDrop`), and each upload calls `@vercel/blob/client`'s `upload()` directly
+  from the browser (straight to Blob storage, bypassing the server entirely for the file
+  bytes themselves), then `addRecipeImage` to record the resulting URL.
 
 ## Error handling
 
@@ -187,7 +224,7 @@ Three layers, matching the three ways things fail:
 | Writing data | Server | Server Action called from a form |
 | HTML generation | Server | RSC render |
 | Navigation between pages | Client | Next's `<Link>` does client-side transitions |
-| Interactivity | Client | the want-to-make toggle only; `"use client"` |
+| Interactivity | Client | the ten `"use client"` components (toggle, search, sort, ratings, tag combobox, row editors, the form shell, delete confirm, the ingredient/step checklist, the photo gallery) |
 
 ## Caching
 
@@ -203,11 +240,16 @@ export.
 
 Each dynamic route becomes a serverless function. A request spins up a short-lived function,
 which renders the page (querying Neon over HTTP), returns the HTML, and is torn down.
-`proxy.ts` runs as an Edge function ahead of all of that. There are no static routes left:
-everything reads the DB, cookies, or `searchParams`, so all routes render on demand.
+`proxy.ts` runs as an Edge function ahead of all of that, and now queries Neon itself (one
+`session` lookup per request, via the same HTTP-based driver, which works from the Edge
+runtime) rather than the pure in-memory hash comparison it used to be. There are no static
+routes left: everything reads the DB, cookies, or `searchParams`, so all routes render on
+demand.
 
-Two env vars are needed in Vercel: `DATABASE_URL` (Neon) and `APP_PASSWORD` (the auth gate;
-if unset, the gate is disabled and the app is public).
+Three env vars are needed in Vercel: `DATABASE_URL` (Neon), `APP_PASSWORD` (the auth gate;
+if unset, the gate is disabled and the app is public), and `BLOB_READ_WRITE_TOKEN` (Vercel
+Blob, for photo uploads; Vercel adds this one automatically once a Blob store is attached to
+the project, the other two are set by hand).
 
 **Migrations.** Vercel builds run whatever `package.json` names `vercel-build` instead of the
 default `build` script, if that script exists. This project's `vercel-build` runs
@@ -258,3 +300,7 @@ manual `npm run db:migrate` run by hand against the shared connection string; se
 | errors | `useFormStatus` | `components/recipe-form.tsx` (`SubmitButton`) | reads the pending state of the enclosing `<form>` to disable the button and show "Saving..." |
 | errors | expected vs unexpected errors | `app/lib/actions.ts`, `app/lib/data.ts` | handled cases (bad input, save failed) return a message; genuinely unexpected throws are left to reach `error.tsx`. `getRecipeById` only treats a malformed uuid as "not found", not a DB outage |
 | errors | `sonner` toast | `app/layout.tsx` `<Toaster>`, `rating-stars` / `want-to-make-toggle` / `delete-recipe-button` | client-side failures of an optimistic action surface as a toast; the optimistic value reverts on its own |
+| redesign | 8th `"use client"` component | `app/components/sort-select.tsx` | same `useSearchParams`/`router.replace` shape as search, this time for a discrete `<select>` instead of a debounced text input |
+| redesign | SQL-side sort with `nullsLast` via raw `sql` | `app/lib/data.ts` `orderByFor` | `asc()`/`desc()` don't take a nulls option on a plain column (that's index-definition-only API); a raw `` sql`...DESC NULLS LAST` `` fragment does, and slots into `.orderBy()` like any other `SQL` value |
+| detail-page | First real Route Handler | `app/api/upload/route.ts` | every prior mutation was a Server Action because the caller was always this app's own UI; here the caller is `@vercel/blob/client`'s browser SDK, which needs a plain HTTP endpoint it controls the request/response shape of, exactly the "not my own frontend" case Q9 names as when you *do* need one |
+| detail-page | Client-direct upload, server never touches file bytes | `app/components/photo-gallery.tsx` + `app/api/upload/route.ts` | the Route Handler only mints a short-lived token (`handleUpload`); the actual file goes browser -> Blob storage directly, so there's no Server Action body-size limit to hit and no file streaming through a serverless function |

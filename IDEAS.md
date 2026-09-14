@@ -35,12 +35,19 @@ favicon, live search.
 Still open:
 - Drag-to-reorder ingredient / step rows (needs a dnd library).
 - Ingredient section headers ("For the sauce", "For the topping").
-- Check off ingredients on the detail page as you cook (Paprika does this).
+- ~~Check off ingredients on the detail page as you cook~~ done, and steps too
+  (`components/recipe-checklist.tsx`, `localStorage`-only, not persisted server-side).
 - Highlight the current step on the detail page.
 - Dark mode toggle (`.dark` tokens already exist).
 - Mobile pass.
 - Better empty states.
 - A sticky "Save" bar on the long form.
+- **"Want to make" marker, redesigned.** Removed from the list-card corner (11/09, the
+  redesign pass) because the old star-overlay didn't fit the flatter card and wasn't
+  distinct enough from the 1-5 rating stars anyway. `toggleWantToMake` and the detail-page
+  toggle still exist and work; only the card surface is gone. Not sure yet what replaces it:
+  a small corner badge, a filter-only "want to make" view instead of a per-card marker, a
+  checkmark, something else entirely.
 
 ## Features
 
@@ -54,5 +61,5 @@ Still open:
   explicitly defers to project 2. Revisit there, or do a deliberately dumb version.
 - Print / cook view (big text, no chrome).
 - "Cooked it" log with a date, so "want to make" has a counterpart.
-- Sort options on the list (title, recently added, recently updated).
+- ~~Sort options on the list~~ done: name, date added, rating (`app/components/sort-select.tsx`).
 - Keyboard shortcuts (new recipe, focus search).

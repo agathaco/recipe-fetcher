@@ -2,7 +2,7 @@
 // Mirrors actions.ts (the write side) but has no "use server": these are plain
 // functions called directly during render, not invoked over the network.
 
-import { desc, eq, ilike } from "drizzle-orm";
+import { asc, desc, eq, ilike, sql } from "drizzle-orm";
 import { cache } from "react";
 
 import { db } from "@/db";
@@ -26,7 +26,10 @@ export const getRecipeById = cache(async (id: string) => {
   // just "give me this one recipe and everything attached to it."
   const recipe = await db.query.recipes.findFirst({
     where: eq(recipes.id, id),
-    with: { recipeTags: { with: { tag: true } } },
+    with: {
+      recipeTags: { with: { tag: true } },
+      images: { orderBy: (images, { asc }) => [asc(images.createdAt)] },
+    },
   });
   if (!recipe) return null;
   return { ...recipe, tags: recipe.recipeTags.map((rt) => rt.tag.name) };
@@ -39,9 +42,30 @@ export async function getAllTagNames(): Promise<string[]> {
 
 type RecipeWithTags = typeof recipes.$inferSelect & { tags: string[] };
 
+export type RecipeSort = "date" | "name" | "rating";
+
+// Order-by expression per sort option. Chosen in SQL, before the join fans
+// out and gets grouped below, so it's one ORDER BY, not a JS sort afterwards.
+function orderByFor(sort: RecipeSort | undefined) {
+  switch (sort) {
+    case "name":
+      return asc(recipes.title);
+    case "rating":
+      // Postgres defaults DESC to NULLS FIRST, which would put every unrated
+      // recipe ahead of every rated one. Drizzle's asc()/desc() don't expose a
+      // nulls option on a plain column (only on index definitions), so this is
+      // a raw SQL fragment instead.
+      return sql`${recipes.rating} DESC NULLS LAST`;
+    case "date":
+    default:
+      return desc(recipes.createdAt);
+  }
+}
+
 export async function getRecipes(filters: {
   tag?: string;
   q?: string;
+  sort?: RecipeSort;
 }): Promise<RecipeWithTags[]> {
   // Manual join instead of the relational query API: a LEFT JOIN fans out to
   // one row per (recipe, tag) pair, grouped back into one row per recipe below.
@@ -53,7 +77,7 @@ export async function getRecipes(filters: {
     .leftJoin(recipeTags, eq(recipeTags.recipeId, recipes.id))
     .leftJoin(tags, eq(tags.id, recipeTags.tagId))
     .where(filters.q ? ilike(recipes.title, `%${filters.q}%`) : undefined)
-    .orderBy(desc(recipes.createdAt));
+    .orderBy(orderByFor(filters.sort));
 
   const byId = new Map<string, RecipeWithTags>();
   for (const row of rows) {

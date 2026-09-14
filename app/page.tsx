@@ -2,7 +2,7 @@ import { Plus, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 
 import { SearchBox } from "@/app/components/search-box";
-import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
+import { SortSelect } from "@/app/components/sort-select";
 import { cn } from "cn";
 import { StarRow } from "@/components/star-row";
 import { TagPill, tagColorClasses } from "@/components/tag-pill";
@@ -10,13 +10,24 @@ import { badgeVariants } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { logout } from "@/app/lib/actions";
-import { getAllTagNames, getRecipes } from "@/app/lib/data";
+import { getAllTagNames, getRecipes, type RecipeSort } from "@/app/lib/data";
 import { param } from "@/app/lib/params";
 
-function filterHref(tag: string | undefined, q: string | undefined): string {
+const SORT_VALUES: RecipeSort[] = ["date", "name", "rating"];
+
+function isRecipeSort(value: string | undefined): value is RecipeSort {
+  return SORT_VALUES.includes(value as RecipeSort);
+}
+
+function filterHref(
+  tag: string | undefined,
+  q: string | undefined,
+  sort: RecipeSort | undefined,
+): string {
   const params = new URLSearchParams();
   if (tag) params.set("tag", tag);
   if (q) params.set("q", q);
+  if (sort && sort !== "date") params.set("sort", sort);
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }
@@ -29,14 +40,16 @@ export default async function HomePage({
   const params = await searchParams;
   const tag = param(params.tag);
   const q = param(params.q);
+  const rawSort = param(params.sort);
+  const sort = isRecipeSort(rawSort) ? rawSort : "date";
 
   const [allRecipes, allTags] = await Promise.all([
-    getRecipes({ tag, q }),
+    getRecipes({ tag, q, sort }),
     getAllTagNames(),
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-10">
+    <main className="mx-auto w-full max-w-6xl px-4 py-10">
       <header className="flex items-center justify-between gap-3">
         <h1 className="text-brand text-3xl font-bold tracking-tight">Recipes</h1>
         <div className="flex shrink-0 items-center gap-2">
@@ -52,19 +65,20 @@ export default async function HomePage({
         </div>
       </header>
 
-      {/* Plain GET form (no-JS fallback); SearchBox updates the URL live. */}
-      <form method="get" className="mt-6">
+      {/* Plain GET form (no-JS fallback); SearchBox and SortSelect update the URL live with JS. */}
+      <form method="get" className="mt-6 flex items-center gap-2">
         {tag && <input type="hidden" name="tag" value={tag} />}
         <SearchBox />
+        <SortSelect />
         <button type="submit" className="sr-only">
-          Search
+          Apply
         </button>
       </form>
 
       {allTags.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-1.5">
           <Link
-            href={filterHref(undefined, q)}
+            href={filterHref(undefined, q, sort)}
             className={badgeVariants({ variant: !tag ? "default" : "secondary" })}
           >
             All
@@ -72,7 +86,7 @@ export default async function HomePage({
           {allTags.map((t) => (
             <Link
               key={t}
-              href={filterHref(t, q)}
+              href={filterHref(t, q, sort)}
               className={cn(
                 "inline-flex rounded-full px-2 py-0.5 text-xs font-medium transition",
                 tagColorClasses(t),
@@ -102,12 +116,12 @@ export default async function HomePage({
           )}
         </p>
       ) : (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {allRecipes.map((recipe) => (
-            <Card
-              key={recipe.id}
-              className="group relative gap-0 overflow-hidden py-0 transition-shadow hover:shadow-lg"
-            >
+            // Flat: no ring, no shadow. Separation comes from the grid gap and
+            // the image, not elevation. Base <Card> is ring-1 by default, so
+            // ring-0 has to come after it in the class string to win the merge.
+            <Card key={recipe.id} className="group gap-0 overflow-hidden rounded-lg py-0 ring-0">
               <Link href={`/recipes/${recipe.id}`} className="block">
                 <div className="bg-muted aspect-[4/3] overflow-hidden">
                   {recipe.imageUrl ? (
@@ -123,7 +137,7 @@ export default async function HomePage({
                     </div>
                   )}
                 </div>
-                <div className="px-4 pt-4 pb-4">
+                <div className="px-3 pt-4 pb-4">
                   <h3 className="text-[15px] leading-snug font-semibold">
                     {recipe.title}
                   </h3>
@@ -139,9 +153,6 @@ export default async function HomePage({
                   )}
                 </div>
               </Link>
-              <div className="absolute top-2.5 right-2.5">
-                <WantToMakeToggle recipeId={recipe.id} initialValue={recipe.wantToMake} compact />
-              </div>
             </Card>
           ))}
         </div>

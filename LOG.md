@@ -256,6 +256,20 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
   `app/layout.tsx`, which cascades to every route. Same behavior (build output still shows
   every route as `ƒ`), less repetition, nothing to keep in sync. ARCHITECTURE.md updated.
 
+## setRecipeTags rewritten as an atomic diff (08/09)
+
+- Was: delete every `recipe_tag` row for the recipe, then re-insert the whole set in a loop
+  with one `INSERT` per tag. Three problems: N+1, a brief window where the recipe had no
+  tags, and no atomicity (neon-http runs single statements, so a mid-loop failure left a
+  partial set).
+- Now: bulk-upsert the tag names (one statement), read their ids back (one `SELECT ... IN`),
+  then `db.batch([delete stale links, insert new links])`. Neon runs a batch as one
+  transaction. Unchanged links are never touched, so no empty window; round trips are fixed
+  at 3 regardless of tag count.
+- E2E `recipes.spec.ts` now swaps a tag on the edit step (remove one, add one) to exercise
+  the diff. All tests green.
+- Came out of interview-prep Q12/Q16. Updated both answers.
+
 ## Migrations run on the production build (11/09)
 
 - `package.json`: new `vercel-build` script. Vercel uses that instead of `build` when it's
@@ -273,16 +287,153 @@ their reasoning live in [DECISIONS.md](./DECISIONS.md). Setup detail is in
 - Came out of writing the honest Q18 interview answer. ARCHITECTURE.md ("How it maps to
   Vercel") and DECISIONS.md updated.
 
-## setRecipeTags rewritten as an atomic diff (08/09)
+## Real sessions replace the static auth cookie (11/09)
 
-- Was: delete every `recipe_tag` row for the recipe, then re-insert the whole set in a loop
-  with one `INSERT` per tag. Three problems: N+1, a brief window where the recipe had no
-  tags, and no atomicity (neon-http runs single statements, so a mid-loop failure left a
-  partial set).
-- Now: bulk-upsert the tag names (one statement), read their ids back (one `SELECT ... IN`),
-  then `db.batch([delete stale links, insert new links])`. Neon runs a batch as one
-  transaction. Unchanged links are never touched, so no empty window; round trips are fixed
-  at 3 regardless of tag count.
-- E2E `recipes.spec.ts` now swaps a tag on the edit step (remove one, add one) to exercise
-  the diff. All tests green.
-- Came out of interview-prep Q12/Q16. Updated both answers.
+- New `session` table: `id` (SHA-256 hex of a random token), `createdAt`, `expiresAt`.
+  Migration `0002_hard_tyger_tiger.sql` generated.
+- `app/lib/auth.ts`: dropped `expectedAuthCookie` (the static-digest helper), added
+  `randomToken()` (32 random bytes via `crypto.getRandomValues`, hex) and `sessionId()`
+  (SHA-256 of a token, same helper reused).
+- `login`: still checks the one shared `APP_PASSWORD`, but now issues a random token, stores
+  its hash in `session` with a 30-day `expiresAt`, and puts the *raw* token (not a hash of
+  the password) in the cookie.
+- `logout`: deletes this device's `session` row by hashing its cookie value, so only this
+  cookie stops working. `proxy.ts`: looks the hashed cookie up in `session` on every request,
+  lazily deletes-and-rejects if `expiresAt` has passed.
+- `app/lib/auth.test.ts` rewritten for the new helpers. Build/typecheck/lint/unit tests all
+  clean (39 passing). E2E auth spec unchanged, it only asserts behavior, not cookie internals.
+- Came out of writing the honest Q20 answer. DECISIONS entry: "Real sessions, not a static
+  cookie". Q19 and Q20 interview answers rewritten to match.
+- Migration applied and curl-verified 12/09, see the closing entry below.
+
+## List redesign: wider grid, flat cards, sort, more tag colours (11/09)
+
+Loosely modelled on a reference layout (fabrx.co/tastebite), adapted rather than copied.
+
+- **Layout:** container widened `max-w-4xl` -> `max-w-6xl`; grid `sm:2/lg:3` ->
+  `sm:2/md:3/lg:4` columns, gap bumped to match.
+- **Flat cards:** shadcn's base `<Card>` ships `ring-1` and no shadow already; removed the
+  `hover:shadow-lg` elevation and overrode the ring to `ring-0` (tailwind-merge, the `cn`
+  package, resolves the conflict since `ring-0` comes later in the class string). Separation
+  is now purely the grid gap and the image, no card "chrome". Card corner radius `rounded-xl`
+  -> `rounded-lg`, tighter internal padding around the title/tags.
+- **Removed:** the want-to-make star overlay from the card corner (the `compact` prop and
+  branch deleted from `want-to-make-toggle.tsx` entirely, it's unused now). The toggle still
+  works on the detail page. No replacement yet, parked in IDEAS.md, not sure what the marker
+  should look like.
+- **Sort added:** `app/components/sort-select.tsx` (8th `"use client"` component), a plain
+  `<select>` inside the same GET form as search so it degrades without JS. `getRecipes` in
+  `data.ts` takes a `sort: "date" | "name" | "rating"` and orders in SQL before the
+  join/group step. Rating sort needed `NULLS LAST` explicitly (Postgres defaults `DESC` to
+  `NULLS FIRST`, which would rank unrated recipes above 5-star ones); Drizzle's `asc()`/
+  `desc()` don't expose a nulls option on a plain column (that API is index-definition-only),
+  so it's a raw `` sql`...DESC NULLS LAST` `` fragment instead.
+- **Tag colours:** `TAG_COLORS` in `tag-pill.tsx` widened from 8 to 14 hues (same hash-to-
+  colour scheme, just a bigger palette), skipping plain red/yellow/green since they read too
+  close to rose/amber/emerald already in the set.
+- Build/typecheck/lint/unit tests (39) all clean. Not browser-verified this session (no
+  Chrome tools available, and login was separately blocked until the pending session-table
+  migration got applied, see the real-sessions entry above and the closing entry below).
+  ARCHITECTURE.md, IDEAS.md updated; the client-component count changed again (seven -> eight),
+  INTERVIEW.md Q1/Q27 updated to match.
+
+## Detail page: prep/cook/oven stats, hostname source link, checkable steps (11/09)
+
+- **New columns** on `recipe`: `prepTime`, `cookTime`, `ovenTemp`, all nullable `text`, same
+  freeform-not-structured call as `ingredients`/`steps` (migration
+  `0003_cold_roland_deschain.sql`). Added to `recipe-fields.tsx` (three inputs in the top
+  card) and read by `createRecipe`/`updateRecipe`. Not wired into `capture.ts` yet, JSON-LD
+  recipes often carry `prepTime`/`cookTime` as ISO 8601 durations (`PT20M`) which would need
+  real parsing, left as a gap for later rather than half-done now.
+- **Stat strip** on the detail page: a `bg-primary/10` card showing whichever of prep/cook/
+  oven-temp are set, with Clock/Flame/Thermometer icons. Hidden entirely if none are set.
+- **Source link** now shows the hostname (`new URL(sourceUrl).hostname`, minus `www.`)
+  instead of the literal word "Source" or `Source (sourceType)`.
+- **Checkable ingredients and steps**: new `components/recipe-checklist.tsx` (9th
+  `"use client"` component). Native checkbox + `<label>` per line (no custom ARIA needed,
+  the browser gives it for free), strikethrough when checked. State is `localStorage`,
+  keyed `checklist:<recipeId>:ingredients` / `...:steps`, read in a `useEffect` after mount
+  rather than during render (localStorage doesn't exist during SSR; reading it any earlier
+  would mismatch the server-rendered HTML). Deliberately not in the DB: which step you're on
+  is this cooking session's state, not the recipe's, and a stale checked-off state from last
+  time would be actively misleading, not useful.
+- Build/typecheck/lint/unit tests (39) all clean. ARCHITECTURE.md updated; client-component
+  count bumped again (eight -> nine), INTERVIEW.md Q1/Q27 updated to match.
+
+## Photo gallery: real uploads via Vercel Blob (11/09)
+
+- **New table** `recipe_image` (`recipe_id` FK cascade, `url`, `created_at`), one-to-many,
+  separate from `recipe.imageUrl` on purpose (migration `0004_orange_mandroid.sql`).
+  `getRecipeById` now also pulls `images` via the relational `with`, ordered oldest-first.
+- **`@vercel/blob`** added. `app/api/upload/route.ts`: a Route Handler (the app's first)
+  implementing `handleUpload`, mints a short-lived client token, restricted to `image/*` and
+  10MB. `app/components/photo-gallery.tsx` (10th `"use client"` component): drag-and-drop +
+  click-to-browse, calls `@vercel/blob/client`'s `upload()` straight from the browser to
+  Blob storage, then the new `addRecipeImage` Server Action to record the URL. Removing a
+  photo (`deleteRecipeImage`) calls Blob's `del()` then removes the DB row.
+- Deliberately client-direct upload (not a Server Action receiving the file): sidesteps the
+  1MB default Server Action body limit entirely, since the file never passes through a
+  function. Deliberately skipped `onUploadCompleted` (a webhook that can't reach localhost),
+  the client calls `addRecipeImage` itself once its own upload resolves instead, same
+  direct-invoke shape as `toggleWantToMake`/`setRating`.
+- New env var `BLOB_READ_WRITE_TOKEN`, documented in `.env.example`. **User still needs to**
+  create a Blob store in the Vercel dashboard and add the token locally (`.env.local`) to
+  actually test the upload path itself; Vercel adds it automatically for the deployed app
+  once a store exists.
+- Build/typecheck/lint/unit tests (39) all clean. DECISIONS entry written (options
+  considered: pasted URLs only, Postgres bytea, Vercel Blob). ARCHITECTURE.md updated,
+  client-component count now ten, INTERVIEW.md Q1/Q27 updated to match.
+- The DB side (table + relation) is verified as of the closing entry below; the actual
+  browser -> Blob -> `/api/upload` round trip is still unexercised, `BLOB_READ_WRITE_TOKEN`
+  isn't set locally yet.
+
+## Three pending migrations applied, auth/session flow verified end to end (12/09)
+
+- Ran `npm run db:migrate` (this time the sandbox allowed it): all three queued migrations
+  landed on the shared Neon DB (`session`, `recipe.prepTime`/`cookTime`/`ovenTemp`,
+  `recipe_image`). This was the actual cause of the query error the user hit
+  (`getRecipes`'s `SELECT` names `prep_time`/`cook_time`/`oven_temp`, columns that didn't
+  exist yet), not a bug in the query itself.
+- Verified the whole auth/session rebuild for real, not just by reading the code: started
+  `npm run dev`, then drove it with `curl` through a genuine browser-shaped flow rather than
+  guessing at one. First attempt failed (plain `-d "password=..."` POST, wrong `Content-Type`
+  and missing the `$ACTION_ID_...` hidden field Next embeds in the form's HTML for its
+  no-JS-capable Server Action path); fetched the real `/login` markup, found the actual field
+  Next expects, resubmitted as `multipart/form-data` with it included. That worked:
+  - Login sets a real `rf_auth` session cookie (not the old static digest).
+  - `GET /` with that cookie returns 200 and renders (confirms the `prep_time`/`cook_time`/
+    `oven_temp` columns and the join both work now).
+  - `GET /recipes/:id` with that cookie returns 200, including the new "Photos" section
+    (confirms the `recipe_image` relation resolves, even with zero rows).
+  - Logout deletes the session row and immediately re-gates (`GET /` back to a 307).
+- Dev server killed afterward, nothing left running.
+- **Still unverified at this point:** the photo upload path (`BLOB_READ_WRITE_TOKEN` wasn't
+  set locally yet), and the `vercel-build` production-gated migration path (needs an actual
+  push).
+- DECISIONS.md confidence notes updated for the real-sessions and photo-upload entries to
+  match what's now actually been exercised.
+
+## Photo upload path verified; first Blob store had to be recreated as public (12/09)
+
+- User added `BLOB_READ_WRITE_TOKEN` to `.env.local`. First real upload attempt through the
+  actual `@vercel/blob/client` `upload()` call failed on two things in turn, both fixed
+  without touching app code:
+  1. `BlobError: Failed to retrieve the client token` — turned out to be `/api/upload` itself
+     redirecting to `/login` (307), the test script wasn't sending a session cookie and
+     `proxy.ts` correctly gates that route too. Fixed by logging in via curl first and
+     passing the cookie through `upload()`'s `headers` option.
+  2. `Cannot use public access on a private store` — the user's first Blob store had been
+     created as **private**; this app needs `access: "public"` (photos are plain `<img
+     src>`, no per-request auth). Checked Vercel's docs: access mode **can't be changed
+     after a store is created**, only chosen at creation. User deleted the private store
+     (nothing had ever been written to it, confirmed before deleting) and created a new one
+     as public, updated the token.
+- With both fixed: ran the real upload end to end (a 1x1 PNG, through `/api/upload`, into
+  the new public store), inserted the same DB row `addRecipeImage` would (the action itself
+  can't be curl-tested, same Flight-protocol limitation as `toggleWantToMake`), confirmed the
+  photo actually renders on the detail page, then deleted both the blob and the row and
+  confirmed both gone.
+- Scratch test scripts (`.scratch-*.mts`, gitignore-worthy but deleted rather than committed
+  either way) removed after; dev server killed.
+- DECISIONS.md's photo-upload entry confidence raised to high, with the private-vs-public
+  gotcha written up as the one real lesson from this pass.

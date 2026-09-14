@@ -1,15 +1,28 @@
-import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
+import { ArrowLeft, Clock, ExternalLink, Flame, Pencil, Thermometer } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { DeleteRecipeButton } from "@/app/components/delete-recipe-button";
+import { PhotoGallery } from "@/app/components/photo-gallery";
 import { RatingStars } from "@/app/components/rating-stars";
 import { WantToMakeToggle } from "@/app/components/want-to-make-toggle";
 import { cn } from "cn";
+import { RecipeChecklist } from "@/components/recipe-checklist";
 import { tagColorClasses } from "@/components/tag-pill";
 import { buttonVariants } from "@/components/ui/button";
 import { deleteRecipe } from "@/app/lib/actions";
 import { getRecipeById } from "@/app/lib/data";
+
+// The link text should read as "the site this came from", not the literal
+// word "Source" or the internal sourceType label. Hostname minus "www." is
+// the simplest honest version of that, no curated site-name list to maintain.
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 export async function generateMetadata({
   params,
@@ -74,6 +87,44 @@ export default async function RecipePage({
         <RatingStars recipeId={recipe.id} initialValue={recipe.rating ?? 0} />
       </div>
 
+      {(recipe.prepTime || recipe.cookTime || recipe.ovenTemp) && (
+        <div className="bg-primary/10 mt-4 flex flex-wrap gap-x-6 gap-y-3 rounded-lg px-4 py-3">
+          {recipe.prepTime && (
+            <div className="flex items-center gap-2">
+              <Clock className="text-primary size-4 shrink-0" />
+              <div className="leading-tight">
+                <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                  Prep
+                </div>
+                <div className="text-sm font-medium">{recipe.prepTime}</div>
+              </div>
+            </div>
+          )}
+          {recipe.cookTime && (
+            <div className="flex items-center gap-2">
+              <Flame className="text-primary size-4 shrink-0" />
+              <div className="leading-tight">
+                <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                  Cook
+                </div>
+                <div className="text-sm font-medium">{recipe.cookTime}</div>
+              </div>
+            </div>
+          )}
+          {recipe.ovenTemp && (
+            <div className="flex items-center gap-2">
+              <Thermometer className="text-primary size-4 shrink-0" />
+              <div className="leading-tight">
+                <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                  Oven
+                </div>
+                <div className="text-sm font-medium">{recipe.ovenTemp}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {recipe.tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {recipe.tags.map((tag) => (
@@ -99,7 +150,7 @@ export default async function RecipePage({
           className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-sm"
         >
           <ExternalLink className="size-3.5" />
-          {recipe.sourceType ? `Source (${recipe.sourceType})` : "Source"}
+          {hostnameOf(recipe.sourceUrl)}
         </a>
       )}
 
@@ -108,11 +159,10 @@ export default async function RecipePage({
           <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
             Ingredients
           </h2>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-            {lines(recipe.ingredients).map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
+          <RecipeChecklist
+            items={lines(recipe.ingredients)}
+            storageKey={`checklist:${recipe.id}:ingredients`}
+          />
         </section>
       )}
 
@@ -121,13 +171,11 @@ export default async function RecipePage({
           <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
             Steps
           </h2>
-          <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm">
-            {lines(recipe.steps).map((line, i) => (
-              <li key={i} className="pl-1">
-                {line}
-              </li>
-            ))}
-          </ol>
+          <RecipeChecklist
+            items={lines(recipe.steps)}
+            storageKey={`checklist:${recipe.id}:steps`}
+            ordered
+          />
         </section>
       )}
 
@@ -139,6 +187,13 @@ export default async function RecipePage({
           <p className="mt-2 text-sm whitespace-pre-line">{recipe.notes}</p>
         </section>
       )}
+
+      <section className="mt-8">
+        <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+          Photos
+        </h2>
+        <PhotoGallery recipeId={recipe.id} images={recipe.images} />
+      </section>
     </main>
   );
 }

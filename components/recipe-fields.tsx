@@ -19,6 +19,9 @@ type Defaults = {
   notes?: string;
   tags?: string[];
   wantToMake?: boolean;
+  prepTime?: string;
+  cookTime?: string;
+  ovenTemp?: string;
 };
 
 function toRows(text: string | undefined): string[] {
@@ -57,6 +60,35 @@ export function RecipeFields({
           <div className="space-y-2">
             <Label>Tags</Label>
             <TagInput defaultValue={defaults.tags ?? []} allTags={allTags} />
+          </div>
+          <div className="grid gap-5 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="prepTime">Prep time</Label>
+              <Input
+                id="prepTime"
+                name="prepTime"
+                placeholder="e.g. 15 min"
+                defaultValue={defaults.prepTime}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cookTime">Cook time</Label>
+              <Input
+                id="cookTime"
+                name="cookTime"
+                placeholder="e.g. 40 min"
+                defaultValue={defaults.cookTime}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ovenTemp">Oven temp</Label>
+              <Input
+                id="ovenTemp"
+                name="ovenTemp"
+                placeholder="e.g. 180C fan"
+                defaultValue={defaults.ovenTemp}
+              />
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Checkbox id="wantToMake" name="wantToMake" defaultChecked={defaults.wantToMake} />

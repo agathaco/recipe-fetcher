@@ -1,10 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { AUTH_COOKIE, expectedAuthCookie, sha256Hex } from "./auth";
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
+import { AUTH_COOKIE, randomToken, sessionId, sha256Hex } from "./auth";
 
 describe("sha256Hex", () => {
   it("produces the known SHA-256 hex of a string", async () => {
@@ -19,15 +15,25 @@ describe("sha256Hex", () => {
   });
 });
 
-describe("expectedAuthCookie", () => {
-  it("returns null when APP_PASSWORD is unset", async () => {
-    vi.stubEnv("APP_PASSWORD", "");
-    expect(await expectedAuthCookie()).toBeNull();
+describe("randomToken", () => {
+  it("returns a 64-char hex string (32 random bytes)", () => {
+    expect(randomToken()).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("returns the digest of APP_PASSWORD when set", async () => {
-    vi.stubEnv("APP_PASSWORD", "letmein");
-    expect(await expectedAuthCookie()).toBe(await sha256Hex("letmein"));
+  it("is different on every call", () => {
+    expect(randomToken()).not.toBe(randomToken());
+  });
+});
+
+describe("sessionId", () => {
+  it("is the SHA-256 hex of the token", async () => {
+    const token = randomToken();
+    expect(await sessionId(token)).toBe(await sha256Hex(token));
+  });
+
+  it("never equals the raw token", async () => {
+    const token = randomToken();
+    expect(await sessionId(token)).not.toBe(token);
   });
 });
 
