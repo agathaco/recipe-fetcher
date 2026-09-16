@@ -1,6 +1,8 @@
-// Server-side recipe capture. Two independent attempts, each allowed to fail
-// quietly: a bad site, a dead link, or a locked-down oEmbed endpoint should
-// never crash the page, only mean "the form comes up empty, paste it yourself."
+// Server-side recipe capture. One attempt, allowed to fail quietly: a bad
+// site or a dead link should never crash the page, only mean "the form comes
+// up empty, paste it yourself." Instagram capture (oEmbed) was cut: dropping
+// a link into a web form isn't really how Instagram gets used, that's a
+// mobile-share pattern, so the second rung wasn't earning its complexity.
 
 type CapturedRecipe = {
   title?: string;
@@ -64,23 +66,33 @@ function decodeEntities(s: string): string {
     .replace(/&amp;/g, "&"); // last, so an already-decoded "&" isn't touched twice
 }
 
+// A recipeInstructions item is usually a plain string or a HowToStep object
+// ({ text }). Some sites (grouped instructions, "For the crust" / "For the
+// filling") nest steps a level deeper as a HowToSection ({ name,
+// itemListElement: [...] }). Without unwrapping that, a HowToStep-shaped
+// reader sees `name` (the section heading) and no `text`, and silently
+// returns the heading instead of the actual steps inside it.
+function flattenInstructionItem(item: unknown): string[] {
+  if (typeof item === "string") return [item];
+  if (!item || typeof item !== "object") return [];
+  const obj = item as Record<string, unknown>;
+  if (Array.isArray(obj.itemListElement)) {
+    const heading = typeof obj.name === "string" ? [obj.name] : [];
+    return [...heading, ...obj.itemListElement.flatMap(flattenInstructionItem)];
+  }
+  return [(obj.text as string) ?? (obj.name as string) ?? ""];
+}
+
 // recipeIngredient is a string array. recipeInstructions varies a lot in
-// practice: a plain string, an array of strings, or an array of HowToStep
-// objects with a "text" field. Flatten whatever shape shows up to one
-// newline-separated block, matching how ingredients/steps are stored.
+// practice, see flattenInstructionItem above. Flatten whatever shape shows
+// up to one newline-separated block, matching how ingredients/steps are
+// stored.
 function toLines(value: unknown): string {
   if (!value) return "";
   if (typeof value === "string") return decodeEntities(value);
   if (Array.isArray(value)) {
     return value
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item === "object") {
-          const obj = item as Record<string, unknown>;
-          return (obj.text as string) ?? (obj.name as string) ?? "";
-        }
-        return "";
-      })
+      .flatMap(flattenInstructionItem)
       .filter(Boolean)
       .map(decodeEntities)
       .join("\n");
@@ -121,38 +133,5 @@ export async function captureFromWebUrl(url: string): Promise<CapturedRecipe | n
   } catch {
     // network error, timeout, non-HTML response, the site blocked us, etc.
     return null;
-  }
-}
-
-export async function captureFromInstagramUrl(url: string): Promise<CapturedRecipe | null> {
-  try {
-    // Instagram's public oEmbed access has been restricted for years and
-    // commonly requires an approved app token. This is left calling the
-    // plain endpoint on purpose: it is expected to fail more often than not,
-    // which is exactly the case the fallback ladder exists for.
-    const res = await fetch(
-      `https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`,
-      { signal: AbortSignal.timeout(8000) },
-    );
-    if (!res.ok) return null;
-
-    const data = (await res.json()) as { title?: string; thumbnail_url?: string };
-    const caption = data.title;
-
-    return {
-      title: caption ? caption.slice(0, 80) : undefined,
-      notes: caption,
-      imageUrl: data.thumbnail_url,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function isInstagramUrl(url: string): boolean {
-  try {
-    return new URL(url).hostname.includes("instagram.com");
-  } catch {
-    return false;
   }
 }

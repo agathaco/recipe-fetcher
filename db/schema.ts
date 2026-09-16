@@ -17,8 +17,8 @@ export const recipes = pgTable("recipe", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
   sourceUrl: text("source_url"),
-  sourceType: text("source_type"), // 'instagram' | 'web' | 'manual'
-  imageUrl: text("image_url"), // oEmbed thumbnail or og:image
+  sourceType: text("source_type"), // 'web' | 'manual' (was also 'instagram'; existing rows may still have it)
+  imageUrl: text("image_url"), // JSON-LD image from capture, or typed/edited by hand
   ingredients: text("ingredients"), // freeform, one per line
   steps: text("steps"), // freeform / markdown
   notes: text("notes"),

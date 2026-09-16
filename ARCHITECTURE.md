@@ -24,9 +24,11 @@ the server/client boundary, and the caching model.
 
 ## What the app does
 
-- **Capture a recipe** three ways: paste a web URL (parses the page's `Recipe` JSON-LD),
-  paste an Instagram URL (oEmbed caption + thumbnail), or type it in by hand. Any capture
-  that fails falls back to an empty form.
+- **Capture a recipe** two ways: paste a web URL (parses the page's `Recipe` JSON-LD) or
+  type it in by hand. Any capture that fails falls back to an empty form. Instagram
+  capture (oEmbed) was cut (11/09): pasting a link into a web form isn't really how
+  Instagram gets used, that's a mobile-share pattern, so it wasn't earning its
+  complexity.
 - **A recipe** has: title, source URL and type, an image, ingredients and steps (freeform
   text, one per line), notes, tags, a "want to make" flag, and a 1-5 rating.
 - **List view** at `/`: a flat card grid, filter by tag, live search by title, sort by date
@@ -102,9 +104,8 @@ Five tables, deliberately flat (`db/schema.ts`):
 
 1. The small URL form posts to the `importFromUrl` Server Action (separate from the save
    form: importing and saving are different mutations).
-2. On the server, `importFromUrl` picks a parser by hostname and calls `captureFromWebUrl` or
-   `captureFromInstagramUrl` in `app/lib/capture.ts`. Those do a server-side `fetch` of the
-   third-party page or API. Any failure returns `null`.
+2. On the server, `importFromUrl` calls `captureFromWebUrl` in `app/lib/capture.ts`, a
+   server-side `fetch` of the page. Any failure returns `null`.
 3. It builds a query string from whatever fields came back and `redirect()`s to
    `/recipes/new?title=...&ingredients=...`.
 4. `/recipes/new` re-renders, reads those `searchParams`, and uses them as the form's
@@ -139,8 +140,8 @@ Five tables, deliberately flat (`db/schema.ts`):
 | `app/error.tsx` | route-level error boundary | `"use client"`, `error` + `reset` props |
 | `app/global-error.tsx` | root-layout error boundary | `"use client"`, renders its own `<html>`/`<body>` |
 | `app/lib/data.ts` | `getRecipeById`, `getRecipes`, `getAllTagNames` | server-side read helpers; manual join + group-in-JS for the filterable list (sorted in SQL before grouping), Drizzle's relational `with` for the single-recipe read |
-| `app/lib/capture.ts` | `captureFromWebUrl`, `captureFromInstagramUrl` | server-side `fetch` of a third-party page/API, never runs in the browser |
-| `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `randomToken`, `sessionId` | Web-Crypto only, shared by the Edge proxy and the Node login/logout actions |
+| `app/lib/capture.ts` | `captureFromWebUrl` | server-side `fetch` of a third-party page, never runs in the browser |
+| `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `randomToken`, `sessionId`, `timingSafeEqual` | Web-Crypto only; portable, not runtime-forced (`proxy.ts` runs on Node, not Edge, see below), shared by the proxy and the login/logout actions |
 | `app/components/want-to-make-toggle.tsx` | the toggle button (detail page only, for now) | `"use client"`, `useOptimistic` |
 | `app/components/search-box.tsx` | the live search input | `"use client"`, debounced `router.replace` |
 | `app/components/sort-select.tsx` | the list page's sort dropdown | `"use client"`, `useSearchParams` + `router.replace`, plain `<select>` inside the same GET form for the no-JS path |
@@ -154,7 +155,7 @@ Five tables, deliberately flat (`db/schema.ts`):
 | `app/api/upload/route.ts` | mints upload tokens for `@vercel/blob/client`, one per file | Route Handler, not a Server Action, `@vercel/blob`'s client-upload contract needs a plain HTTP endpoint the browser SDK calls directly |
 | `components/tag-pill.tsx` | colour-per-tag pill + `tagColorClasses` helper | plain component |
 | `components/ui/sonner.tsx` | the toast outlet, mounted once in the layout | `"use client"` |
-| `proxy.ts` | the auth gate | runs before every matched request (Edge runtime); looks the session up in `session` on every request, redirects to `/login` if missing, unknown, or expired |
+| `proxy.ts` | the auth gate | runs before every matched request, on the Node.js runtime (Next 16's default for Proxy, not Edge); looks the session up in `session` on every request, redirects to `/login` if missing, unknown, or expired |
 | `app/globals.css` | Tailwind entry + shadcn theme tokens (fuchsia-purple primary, `.text-brand` gradient, `--font-heading` = Bricolage Grotesque) | (not Next specific) |
 | `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
 | `components/recipe-fields.tsx` | the card sections shared by the add and edit forms | plain component |
@@ -240,11 +241,12 @@ export.
 
 Each dynamic route becomes a serverless function. A request spins up a short-lived function,
 which renders the page (querying Neon over HTTP), returns the HTML, and is torn down.
-`proxy.ts` runs as an Edge function ahead of all of that, and now queries Neon itself (one
-`session` lookup per request, via the same HTTP-based driver, which works from the Edge
-runtime) rather than the pure in-memory hash comparison it used to be. There are no static
-routes left: everything reads the DB, cookies, or `searchParams`, so all routes render on
-demand.
+`proxy.ts` runs ahead of all of that, on the Node.js runtime (Next 16's default for Proxy;
+this doc and `auth.ts`'s own comment described it as Edge until 16/09, which was wrong for
+this Next version), and now queries Neon itself (one `session` lookup per request, via the
+same HTTP-based driver Server Components use) rather than the pure in-memory hash
+comparison it used to be. There are no static routes left: everything reads the DB,
+cookies, or `searchParams`, so all routes render on demand.
 
 Three env vars are needed in Vercel: `DATABASE_URL` (Neon), `APP_PASSWORD` (the auth gate;
 if unset, the gate is disabled and the app is public), and `BLOB_READ_WRITE_TOKEN` (Vercel
@@ -292,7 +294,7 @@ manual `npm run db:migrate` run by hand against the shared connection string; se
 | 9 | Server Action called directly (no `<form>`) | `toggleWantToMake` invoked from `onClick` | a Server Action isn't only for forms; a Client Component can call one like any async function, as long as it's wrapped in a transition |
 | UI pass | `useSearchParams` + `useRouter().replace` | `app/components/search-box.tsx` | a Client Component reads and writes the URL query string; `replace` keeps keystrokes out of history, `{ scroll: false }` stops the page jumping |
 | 10 | `proxy.ts` (was `middleware.ts` pre-16) | project root | one file, runs before every matched request; `export function proxy` + a `config.matcher` regex |
-| 10 | Edge runtime constraints | `proxy.ts` + `app/lib/auth.ts` | proxy code can't use Node APIs, so the shared auth helper uses only Web Crypto |
+| 10 | Proxy's default runtime | `proxy.ts` + `app/lib/auth.ts` | Next 16 defaults Proxy to the **Node.js** runtime, not Edge (a real correction, 16/09, this file and `auth.ts` both said Edge until then); the shared auth helper still uses only Web Crypto anyway, for portability, not because Edge forced it |
 | 10 | `cookies()` from `next/headers` | `login` / `logout` in `app/lib/actions.ts` | read and set cookies inside a Server Action; setting one re-renders the current route |
 | errors | `error.tsx` | `app/error.tsx` | route-level error boundary; Next swaps it in when a Server Component render (or a data helper it calls) throws. Must be `"use client"`, gets `error` + `reset` props |
 | errors | `global-error.tsx` | `app/global-error.tsx` | catches throws in the root layout itself; replaces the whole document so it renders its own `<html>`/`<body>` |

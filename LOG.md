@@ -418,11 +418,11 @@ Loosely modelled on a reference layout (fabrx.co/tastebite), adapted rather than
 - User added `BLOB_READ_WRITE_TOKEN` to `.env.local`. First real upload attempt through the
   actual `@vercel/blob/client` `upload()` call failed on two things in turn, both fixed
   without touching app code:
-  1. `BlobError: Failed to retrieve the client token` — turned out to be `/api/upload` itself
+  1. `BlobError: Failed to retrieve the client token`, turned out to be `/api/upload` itself
      redirecting to `/login` (307), the test script wasn't sending a session cookie and
      `proxy.ts` correctly gates that route too. Fixed by logging in via curl first and
      passing the cookie through `upload()`'s `headers` option.
-  2. `Cannot use public access on a private store` — the user's first Blob store had been
+  2. `Cannot use public access on a private store`, the user's first Blob store had been
      created as **private**; this app needs `access: "public"` (photos are plain `<img
      src>`, no per-request auth). Checked Vercel's docs: access mode **can't be changed
      after a store is created**, only chosen at creation. User deleted the private store
@@ -437,3 +437,74 @@ Loosely modelled on a reference layout (fabrx.co/tastebite), adapted rather than
   either way) removed after; dev server killed.
 - DECISIONS.md's photo-upload entry confidence raised to high, with the private-vs-public
   gotcha written up as the one real lesson from this pass.
+
+## Instagram capture removed (15/09)
+
+- `captureFromInstagramUrl` and `isInstagramUrl` deleted from `app/lib/capture.ts`.
+  `importFromUrl` always uses `captureFromWebUrl` now, no hostname branch. Form placeholder
+  on `/recipes/new` no longer mentions Instagram. `capture.test.ts`'s `isInstagramUrl` tests
+  removed (37 passing, down from 39).
+- Reasoning: Instagram is a mobile-app product, recipes found there get saved inside
+  Instagram's own save feature, not copied out as a URL and pasted into a browser form. The
+  oEmbed rung was also expected to fail most of the time anyway (day 7's own note said so),
+  so it was real code earning very little. Fallback ladder is now two rungs: JSON-LD, then
+  paste it yourself.
+- `sourceType` keeps `'instagram'` as a possible value on old rows only, no migration
+  needed, it was always a plain `text` column with no CHECK constraint.
+- DECISIONS entry: "Cutting Instagram capture" (the original capture entry from day 7 is
+  left as-is, historical record of why it was built that way at the time). README,
+  ARCHITECTURE updated. INTERVIEW.md Q23's fallback-ladder answer rewritten to match; Q25
+  (which asked about the now-removed oEmbed behavior) repurposed into a question about this
+  cut instead of left stale.
+- Build/typecheck/lint/unit tests all clean.
+
+## Whole-codebase review: five real fixes, one factual correction (16/09)
+
+A full pass over every file, not just the working-tree diff, using `/code-review` at high
+effort with independent verification. Eight findings, six addressed:
+
+- **Blob storage leak on recipe delete.** `deleteRecipe` deleted the recipe row (which
+  cascade-deletes `recipe_image` rows via the FK) but never told Vercel Blob to delete the
+  actual files. Every deleted recipe's photos were leaking forever with no code path left
+  that could find them again. Fixed: `deleteRecipe` now looks up the recipe's images and
+  calls `del()` on each, best-effort (`Promise.allSettled`, a failed blob delete shouldn't
+  block deleting the recipe itself).
+- **`deleteRecipeImage`'s delete order was backwards.** It deleted the Blob object first,
+  then the DB row. A DB failure in between left a row pointing at a permanently-404 URL,
+  a broken image nothing would ever retry. Flipped: DB row (and `revalidatePath`) first,
+  Blob delete after, swallowed on failure, since the user-visible part already succeeded
+  by then and a leftover orphaned blob is harmless.
+- **Search didn't escape SQL LIKE wildcards.** Searching for a title containing a literal
+  `%` or `_` (`"50% Whole Wheat Bread"`) let Postgres read it as a wildcard instead of a
+  literal character. New `escapeLikePattern()` in `data.ts` escapes `\`, `%`, and `_`
+  before building the `ILIKE` pattern.
+- **`recipeInstructions` parsing silently dropped real steps for `HowToSection`-grouped
+  recipes.** Sites that group steps under headings ("For the crust" / "For the filling")
+  use a `HowToSection` object (`{ name, itemListElement: [...] }`), which the old parser
+  read as a `HowToStep` and returned just the heading, the actual steps inside
+  `itemListElement` were silently lost, capture still reported success. Fixed with a
+  recursive `flattenInstructionItem()` in `capture.ts`; new test covers it (38 passing).
+- **Login used `!==` on the password**, not constant-time. Added `timingSafeEqual()` to
+  `auth.ts` (compares every byte regardless of where the first mismatch is) and switched
+  `login` to use it. Rate limiting / lockout on repeated attempts was flagged too and
+  deliberately left alone: `APP_PASSWORD` has enough entropy that brute force isn't
+  practically feasible regardless, same "single-user, known, would fix before it mattered"
+  treatment as the SSRF gap (Q24), not silently missed.
+- **`proxy.ts` runs on the Node.js runtime, not Edge.** This was wrong everywhere it was
+  stated, `auth.ts`'s top comment, `ARCHITECTURE.md` (three places), and INTERVIEW.md's
+  Q21, all of which said Edge. Checked directly against `node_modules/next/dist/docs`:
+  Next 16 changed Proxy's default runtime to Node.js, and the `runtime` config option
+  isn't even settable in Proxy files anymore. Auth still uses only Web Crypto, but the
+  reason is portability, not a runtime constraint, since there was never a real one here.
+  `auth.ts` and `ARCHITECTURE.md` corrected; INTERVIEW.md's Q21 rewritten (its whole
+  premise was inverted); the day-10 LOG entry above is left as-is, an honest record of
+  what was believed at the time, not rewritten to look like it was always known.
+- **SSRF in `captureFromWebUrl`** was re-confirmed but not changed, it's already a known,
+  documented, deliberately-deferred gap (Q24, DECISIONS, the SPEC's own framing), not a new
+  finding.
+
+Build/typecheck/lint/unit tests all clean after every fix. Also a useful reminder of why
+the docs need a real review pass now and then, not just updates alongside whatever feature
+touched them last: the Edge/Node mistake had been sitting in the codebase since day 10 and
+was never once caught, because nobody had checked it against the actual framework docs
+until this pass did.

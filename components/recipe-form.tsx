@@ -34,7 +34,7 @@ export function RecipeForm({
   defaults?: Defaults;
   allTags: string[];
   submitLabel: string;
-  // Only the "add" form sends this (manual / web / instagram).
+  // Only the "add" form sends this (manual / web).
   sourceType?: string;
 }) {
   const [state, formAction] = useActionState(action, {});

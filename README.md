@@ -28,8 +28,8 @@ fetching and no loading spinner. Every mutation (add, edit, delete, import, the 
 toggle) is a Server Action wired to a form or called from the one Client Component, so there
 is no REST API layer over my own database. The only `"use client"` component is the
 want-to-make toggle, which needs `useOptimistic` to feel instant. Capturing a recipe from a
-URL happens on the server: it fetches the page and parses its `Recipe` JSON-LD, or calls
-Instagram's oEmbed endpoint, and any failure falls back to an empty form. Auth is a single
+URL happens on the server: it fetches the page and parses its `Recipe` JSON-LD, and any
+failure falls back to an empty form. Auth is a single
 shared password checked in `proxy.ts` before every request, which is all a one-user app
 needs.
 

@@ -1,6 +1,8 @@
-// Shared by proxy.ts (runs on the Edge runtime) and the login/logout actions
-// (Node). Uses only Web Crypto, which exists in both runtimes, so there is one
-// implementation instead of two.
+// Shared by proxy.ts and the login/logout actions. Uses only Web Crypto, which
+// exists in both Edge and Node, so this one implementation is portable rather
+// than tied to whichever runtime Proxy happens to use (Next 16 defaults Proxy
+// to the Node.js runtime, not Edge; older Next versions, and this file's own
+// comment until 16/09, assumed Edge, that assumption was wrong for this app).
 
 export const AUTH_COOKIE = "rf_auth";
 
@@ -30,4 +32,23 @@ export function randomToken(): string {
 // the password instead of storing it.
 export function sessionId(token: string): Promise<string> {
   return sha256Hex(token);
+}
+
+// Constant-time string comparison: touches every character regardless of
+// where the first mismatch is, so response timing can't be used to narrow
+// down a guess character by character. `!==` on the raw password does not
+// have this property (JS string equality can short-circuit at the first
+// differing character).
+export function timingSafeEqual(a: string, b: string): boolean {
+  const bytesA = new TextEncoder().encode(a);
+  const bytesB = new TextEncoder().encode(b);
+  // Comparing against a fixed-length copy of `b` keeps the loop length
+  // independent of `a`'s length too, not just which byte differs.
+  const paddedA = new Uint8Array(bytesB.length);
+  paddedA.set(bytesA.subarray(0, bytesB.length));
+  let diff = bytesA.length ^ bytesB.length;
+  for (let i = 0; i < bytesB.length; i++) {
+    diff |= paddedA[i] ^ bytesB[i];
+  }
+  return diff === 0;
 }

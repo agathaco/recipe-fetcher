@@ -8,6 +8,14 @@ import { cache } from "react";
 import { db } from "@/db";
 import { recipeTags, recipes, tags } from "@/db/schema";
 
+// Postgres's LIKE/ILIKE treats "%" and "_" as wildcards even inside a literal
+// search term, and "\" as its own escape character. Escape all three so a
+// title like "50% Whole Wheat Bread" is matched literally instead of "%"
+// being read as "anything here".
+function escapeLikePattern(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -76,7 +84,7 @@ export async function getRecipes(filters: {
     .from(recipes)
     .leftJoin(recipeTags, eq(recipeTags.recipeId, recipes.id))
     .leftJoin(tags, eq(tags.id, recipeTags.tagId))
-    .where(filters.q ? ilike(recipes.title, `%${filters.q}%`) : undefined)
+    .where(filters.q ? ilike(recipes.title, `%${escapeLikePattern(filters.q)}%`) : undefined)
     .orderBy(orderByFor(filters.sort));
 
   const byId = new Map<string, RecipeWithTags>();

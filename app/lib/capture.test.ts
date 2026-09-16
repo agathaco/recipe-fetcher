@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { captureFromWebUrl, isInstagramUrl } from "./capture";
+import { captureFromWebUrl } from "./capture";
 
 function htmlResponse(html: string, ok = true) {
   return { ok, text: async () => html } as Response;
@@ -13,17 +13,6 @@ function pageWithJsonLd(json: unknown, { quoted = true } = {}) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-});
-
-describe("isInstagramUrl", () => {
-  it("matches instagram hosts", () => {
-    expect(isInstagramUrl("https://www.instagram.com/p/abc/")).toBe(true);
-    expect(isInstagramUrl("https://instagram.com/reel/xyz")).toBe(true);
-  });
-  it("rejects other hosts and junk", () => {
-    expect(isInstagramUrl("https://example.com/recipe")).toBe(false);
-    expect(isInstagramUrl("not a url")).toBe(false);
-  });
 });
 
 describe("captureFromWebUrl", () => {
@@ -128,6 +117,40 @@ describe("captureFromWebUrl", () => {
 
     const result = await captureFromWebUrl("https://example.com/x");
     expect(result?.steps).toBe("Preheat oven\nCombine dry ingredients");
+  });
+
+  it("flattens HowToSection-grouped instructions, not just their headings", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        htmlResponse(
+          pageWithJsonLd({
+            "@type": "Recipe",
+            name: "Layered Cake",
+            recipeInstructions: [
+              {
+                "@type": "HowToSection",
+                name: "For the crust",
+                itemListElement: [
+                  { "@type": "HowToStep", text: "Mix flour and butter" },
+                  { "@type": "HowToStep", text: "Press into pan" },
+                ],
+              },
+              {
+                "@type": "HowToSection",
+                name: "For the filling",
+                itemListElement: [{ "@type": "HowToStep", text: "Whisk eggs and sugar" }],
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    const result = await captureFromWebUrl("https://example.com/x");
+    expect(result?.steps).toBe(
+      "For the crust\nMix flour and butter\nPress into pan\nFor the filling\nWhisk eggs and sugar",
+    );
   });
 
   it("returns null when there is no Recipe node", async () => {

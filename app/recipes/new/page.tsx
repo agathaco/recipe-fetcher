@@ -43,7 +43,7 @@ export default async function NewRecipePage({
             <Input
               name="importUrl"
               type="url"
-              placeholder="Paste a recipe or Instagram URL"
+              placeholder="Paste a recipe URL"
               autoComplete="off"
             />
             <Button type="submit" variant="secondary">

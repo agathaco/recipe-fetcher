@@ -54,6 +54,80 @@ in my own words. Checked means the entry is written.
 - [x] Real sessions instead of a static password-digest cookie
 - [x] Pulling the want-to-make marker off the list cards with no replacement yet
 - [x] Photo uploads: Vercel Blob, client-direct, via a Route Handler
+- [x] Cutting Instagram capture
+- [x] No login rate limiting, despite the finding
+
+---
+
+## No login rate limiting, despite the finding
+
+**Date:** 16/09/2026
+
+**Context:** A whole-codebase security review flagged `login` as having no rate limit,
+delay, or lockout on repeated failed attempts, so `APP_PASSWORD` could in principle be
+brute-forced online with no backoff anywhere in the request path.
+
+**Options I considered:**
+- A fixed delay after a wrong attempt (a few hundred milliseconds), cheap, one line.
+- A real rate limiter, per-IP or per-cookie attempt counting with a cooldown or lockout,
+  a genuine feature with its own storage and edge cases (what resets it, what happens to
+  me if I trip my own lockout).
+- Do nothing, document why.
+
+**Chose:** do nothing, document why, same treatment as the SSRF gap (Q24).
+
+**Why:** `APP_PASSWORD` is a 25-character machine-generated string spanning upper and
+lower case letters, digits, and a symbol, on the order of 150 bits of entropy. No realistic
+request rate, rate-limited or not, brings brute-forcing that within reach; a delay or
+lockout here would be defense-in-depth for a threat that isn't actually reachable given
+the password's own strength, not a fix for a real exposure. Building a real rate limiter
+would be solving a problem this specific setup doesn't have, the same reasoning that kept
+SSRF unfixed: single-user, low realistic risk, and worth naming explicitly rather than
+leaving unaddressed and unexplained.
+
+**What I did fix in the same pass, because it was free:** switched the password comparison
+itself from `!==` to a constant-time compare (`timingSafeEqual` in `auth.ts`). That one has
+no cost and no tradeoff to weigh, so it's not in the same category as the rate-limiting
+question, it just wasn't done originally for no real reason.
+
+**What I'd revisit this under:** a weaker or user-chosen password (this reasoning is
+specific to a long machine-generated one), or a second user, at which point real auth
+(Q22's Auth.js answer) replaces this whole model anyway.
+
+**Confidence:** high. The math on the password's entropy is straightforward, and this is
+the same honest-tradeoff shape as the SSRF and shared-test-database gaps already
+documented elsewhere in this file.
+
+---
+
+## Cutting Instagram capture
+
+**Date:** 15/09/2026
+
+**Context:** `captureFromInstagramUrl` existed from day 7, a best-effort oEmbed call
+expected to fail often (see "Recipe capture: server-side fetch, JSON-LD, oEmbed, and a
+fallback ladder"). Revisiting whether it was worth keeping.
+
+**Why cut it, not just leave it:** the premise doesn't hold up. Instagram is a mobile-app
+product; recipes found there get saved inside Instagram's own save feature, not copied out
+as a URL and pasted into a browser form. The "paste an Instagram link" flow this app
+offered was solving a problem that doesn't really happen: by the time someone has a URL to
+paste into a web form, they've already left the context (the mobile app, mid-scroll) where
+Instagram recipes actually get found. Pair that with oEmbed being expected to fail most of
+the time anyway, and the second rung of the fallback ladder was real code (a function, a
+hostname check, tests, a form placeholder mentioning it) earning very little.
+
+**What changed:** `captureFromInstagramUrl` and `isInstagramUrl` removed from
+`app/lib/capture.ts`. `importFromUrl` always uses the web parser now. The `sourceType`
+column keeps `'instagram'` as a possible value only for old rows already saved with it,
+not because a migration was needed, it's a plain `text` column, no CHECK constraint.
+
+**What I'd revisit this under:** if this ever became a shared or mobile-first tool where
+"save the app straight from Instagram" was a real interaction, not a hypothetical one.
+
+**Confidence:** high. This is a scope cut with a clear reason, not a bug fix, and it
+shrinks the fallback ladder to something that's fully earning its complexity: JSON-LD,
+then paste it yourself.
 
 ---
 
@@ -110,7 +184,7 @@ on the detail page, then deleted (blob + row) and confirmed both gone. One real 
 the way: the first Blob store got created as **private** by default, and `access: "public"`
 (needed since photos render as plain `<img src>`, no per-request auth) isn't allowed against
 a private store, and unlike most store settings this one **can't be changed after creation**
-(confirmed against Vercel's docs) — had to delete that store and create a new one as public.
+(confirmed against Vercel's docs), so had to delete that store and create a new one as public.
 Worth remembering for next time: pick the access mode deliberately at creation, it's a
 one-way door.
 

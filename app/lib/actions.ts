@@ -9,8 +9,8 @@ import { del } from "@vercel/blob";
 
 import { db } from "@/db";
 import { recipeImages, recipeTags, recipes, sessions, tags } from "@/db/schema";
-import { AUTH_COOKIE, SESSION_TTL_MS, randomToken, sessionId } from "@/app/lib/auth";
-import { captureFromInstagramUrl, captureFromWebUrl, isInstagramUrl } from "@/app/lib/capture";
+import { AUTH_COOKIE, SESSION_TTL_MS, randomToken, sessionId, timingSafeEqual } from "@/app/lib/auth";
+import { captureFromWebUrl } from "@/app/lib/capture";
 
 // Everything in this file runs only on the server. It is imported by forms and
 // invoked over the network as a POST, so it must validate its own input.
@@ -173,6 +173,21 @@ export async function updateRecipe(
 // Same bind pattern: the delete button's form calls deleteRecipe.bind(null, id).
 // No FormData needed here, so the bound function takes no other arguments.
 export async function deleteRecipe(id: string) {
+  // recipe_image rows cascade-delete with the recipe (FK on delete cascade),
+  // but that only removes the DB rows, not the actual files sitting in Blob
+  // storage. Without this, every deleted recipe's photos leak forever with no
+  // code path left that could ever find them again to clean up.
+  const images = await db
+    .select({ url: recipeImages.url })
+    .from(recipeImages)
+    .where(eq(recipeImages.recipeId, id));
+  if (images.length > 0) {
+    // Best-effort: one failed blob delete shouldn't block deleting the
+    // recipe itself, an orphaned blob costs a few KB, a recipe you can't
+    // delete at all is worse.
+    await Promise.allSettled(images.map((img) => del(img.url)));
+  }
+
   await db.delete(recipes).where(eq(recipes.id, id));
 
   revalidatePath("/");
@@ -190,9 +205,17 @@ export async function addRecipeImage(recipeId: string, url: string) {
 }
 
 export async function deleteRecipeImage(imageId: string, recipeId: string, url: string) {
-  await del(url);
+  // DB row first, then the blob: if the blob delete fails, the row (the only
+  // thing the gallery actually reads) is already gone, so the photo still
+  // disappears correctly and the leftover blob is just harmless orphaned
+  // storage. The reverse order was worse: a blob delete that succeeds right
+  // before a DB failure would leave a row pointing at a permanently-404 URL,
+  // a broken image with nothing left to retry the cleanup.
   await db.delete(recipeImages).where(eq(recipeImages.id, imageId));
   revalidatePath(`/recipes/${recipeId}`);
+  await del(url).catch(() => {
+    // Swallowed on purpose, see above: the user-visible part already succeeded.
+  });
 }
 
 // The login form on /login posts here. One shared password, compared against
@@ -205,7 +228,7 @@ export async function login(formData: FormData) {
   const from = str(formData.get("from"));
   const secret = process.env.APP_PASSWORD;
 
-  if (!secret || password !== secret) {
+  if (!secret || !timingSafeEqual(password, secret)) {
     redirect(`/login?error=1${from ? `&from=${encodeURIComponent(from)}` : ""}`);
   }
 
@@ -273,11 +296,10 @@ export async function importFromUrl(formData: FormData) {
   const params = new URLSearchParams();
 
   if (url) {
-    const instagram = isInstagramUrl(url);
-    const captured = instagram ? await captureFromInstagramUrl(url) : await captureFromWebUrl(url);
+    const captured = await captureFromWebUrl(url);
 
     params.set("sourceUrl", url);
-    params.set("sourceType", instagram ? "instagram" : "web");
+    params.set("sourceType", "web");
     if (!captured) {
       params.set("importFailed", "1");
     } else {
