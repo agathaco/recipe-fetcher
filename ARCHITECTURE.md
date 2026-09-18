@@ -51,16 +51,26 @@ the server/client boundary, and the caching model.
 
 ## Data model
 
-Six tables (`db/schema.ts`):
+Seven tables (`db/schema.ts`):
 
 - **`user`**: one row per account. `email` (unique), `passwordHash` (bcrypt), `createdAt`.
   Added when the app grew from one shared password to real accounts; every `recipe` and
   `tag` now belongs to one of these.
 - **`recipe`**: one row per recipe. `ownerId` (FK to `user`, `on delete cascade`) scopes it
-  to one account. `ingredients` and `steps` are plain `text` columns, one item per line, not
-  their own tables. `want_to_make` (bool) and `rating` (nullable int) are added as the app
-  grew. `prep_time` / `cook_time` / `oven_temp` are also plain nullable `text`: "20 min" and
-  "180C fan" need to just work, no normalising attempted.
+  to one account. `ingredients` is a plain `text` column, one item per line, still the
+  display source of truth for every recipe (see `recipe_ingredient` below for the
+  structured side that now exists alongside it). `steps` is still plain `text` too, no
+  structure attempted there. `want_to_make` (bool) and `rating` (nullable int) are added
+  as the app grew. `prep_time` / `cook_time` / `oven_temp` are also plain nullable `text`:
+  "20 min" and "180C fan" need to just work, no normalising attempted.
+- **`recipe_ingredient`**: one row per ingredient line, alongside `recipe.ingredients`'s
+  text blob, not replacing it. `rawText` (the line as typed/imported, always the display
+  fallback), a best-effort parse of it into `quantity` (nullable `doublePrecision`),
+  `unit` (nullable `text`), `name` (`text`, the whole line if nothing else parsed), and
+  `position` (explicit ordering, replacing "implied by newlines in a text blob"). Written
+  going forward only: new recipes, or an existing one the next time it's edited, never
+  backfilled onto old recipes by the migration that added it. See DECISIONS ("Structured
+  ingredients") for the parser design.
 - **`tag`**: one row per `(ownerId, name)` pair, unique per account, not globally. Two
   accounts can each have their own "vegan" tag; neither sees the other's. Grown from a
   single global `unique(name)` when tags stopped being global, see DECISIONS.
@@ -104,8 +114,10 @@ now that the backfill ran, see LOG's "Growing past v1: Phase 1" entry.
 2. `createRecipe` is a Server Action (`"use server"` in `app/lib/actions.ts`). Next turns the
    form into one that POSTs to itself.
 3. On submit, the browser POSTs the form data. Next runs `createRecipe` **on the server**.
-4. The action validates input, does a Drizzle `insert`, writes the tags via `setRecipeTags`,
-   calls `revalidatePath("/")`, then `redirect()`.
+4. The action validates input, does a Drizzle `insert`, writes the tags via `setRecipeTags`
+   and structured ingredients via `setRecipeIngredients` (parses each row with
+   `parseIngredientLine`, `app/lib/ingredients.ts`), calls `revalidatePath("/")`, then
+   `redirect()`.
 5. Next sends back a redirect. The browser lands on the new recipe's page, which renders
    fresh via lifecycle 1.
 6. This works with JavaScript disabled, because it is a real form POST.
@@ -170,6 +182,7 @@ now that the backfill ran, see LOG's "Growing past v1: Phase 1" entry.
 | `app/global-error.tsx` | root-layout error boundary | `"use client"`, renders its own `<html>`/`<body>` |
 | `app/lib/data.ts` | `getRecipeById`, `getRecipes`, `getAllTagNames`, each taking an `ownerId` | server-side read helpers; manual join + group-in-JS for the filterable list (sorted in SQL before grouping), Drizzle's relational `with` for the single-recipe read |
 | `app/lib/capture.ts` | `captureFromWebUrl` | server-side `fetch` of a third-party page, never runs in the browser |
+| `app/lib/ingredients.ts` | `parseIngredientLine` | pure function, no DB/React, best-effort regex parse of one freeform ingredient line into `{quantity, unit, name}` |
 | `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `randomToken`, `sessionId`, `hashPassword`, `verifyPassword` | session helpers are Web-Crypto only, portable, not runtime-forced (`proxy.ts` runs on Node, not Edge, see below); `hashPassword`/`verifyPassword` wrap `bcryptjs`; shared by the proxy and the signup/login/logout actions |
 | `app/lib/session.ts` | `getCurrentUser()` (React.cache), `requireCurrentUser()` | re-derives "who is this" from the cookie, for Server Components/Actions `proxy.ts` can't pass data to directly |
 | `app/components/want-to-make-toggle.tsx` | the toggle button (detail page only, for now) | `"use client"`, `useOptimistic` |

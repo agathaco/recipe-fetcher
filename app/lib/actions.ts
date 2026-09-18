@@ -10,6 +10,7 @@ import { del } from "@vercel/blob";
 import { db } from "@/db";
 import {
   recipeImages,
+  recipeIngredients,
   recipeTags,
   recipes,
   sessions,
@@ -26,6 +27,7 @@ import {
 } from "@/app/lib/auth";
 import { requireCurrentUser } from "@/app/lib/session";
 import { captureFromWebUrl } from "@/app/lib/capture";
+import { parseIngredientLine } from "@/app/lib/ingredients";
 
 // Everything in this file runs only on the server. It is imported by forms and
 // invoked over the network as a POST, so it must validate its own input.
@@ -111,6 +113,29 @@ async function setRecipeTags(recipeId: string, ownerId: string, rawNames: string
   ]);
 }
 
+// Structured ingredients, alongside `recipe.ingredients`'s text blob, not
+// replacing it (see DECISIONS, and db/schema.ts's comment on the table).
+// Unlike setRecipeTags, these rows are entirely private to one recipe, no
+// cross-recipe sharing to preserve, so a plain delete-then-reinsert is
+// correct and simpler than a diff-based upsert.
+async function setRecipeIngredients(recipeId: string, rawRows: string[]) {
+  const rows = rawRows
+    .map((v) => v.replace(/\s*\n\s*/g, " ").trim())
+    .filter(Boolean);
+
+  await db.delete(recipeIngredients).where(eq(recipeIngredients.recipeId, recipeId));
+  if (rows.length === 0) return;
+
+  await db.insert(recipeIngredients).values(
+    rows.map((rawText, position) => ({
+      recipeId,
+      position,
+      rawText,
+      ...parseIngredientLine(rawText),
+    })),
+  );
+}
+
 // Signature is (prevState, formData) so it can back a `useActionState` form.
 export async function createRecipe(
   _prev: FormState,
@@ -142,6 +167,7 @@ export async function createRecipe(
       .returning();
 
     await setRecipeTags(created.id, user.id, formData.getAll("tag").map(String));
+    await setRecipeIngredients(created.id, formData.getAll("ingredient").map(String));
     createdId = created.id;
   } catch {
     return { error: SAVE_FAILED };
@@ -166,6 +192,22 @@ export async function updateRecipe(
 
   const user = await requireCurrentUser();
 
+  // Ownership check first, before anything else, same reasoning as
+  // deleteRecipe's pre-check: setRecipeTags/setRecipeIngredients below only
+  // scope their writes by recipeId, not ownerId (tags rows are already
+  // ownerId-scoped themselves, but the recipeTags/recipe_ingredient join
+  // rows they write aren't). Without this check up front, a direct POST
+  // with someone else's recipe id would correctly update zero rows in
+  // `recipes` (the WHERE below still filters by ownerId too, defense in
+  // depth) but would *not* have been stopped from still linking your own
+  // tags or ingredient rows onto their recipe.
+  const [owned] = await db
+    .select({ id: recipes.id })
+    .from(recipes)
+    .where(and(eq(recipes.id, id), eq(recipes.ownerId, user.id)))
+    .limit(1);
+  if (!owned) redirect("/");
+
   try {
     await db
       .update(recipes)
@@ -184,6 +226,7 @@ export async function updateRecipe(
       .where(and(eq(recipes.id, id), eq(recipes.ownerId, user.id)));
 
     await setRecipeTags(id, user.id, formData.getAll("tag").map(String));
+    await setRecipeIngredients(id, formData.getAll("ingredient").map(String));
   } catch {
     return { error: SAVE_FAILED };
   }

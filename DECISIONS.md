@@ -37,6 +37,10 @@ in my own words. Checked means the entry is written.
 - [x] **bcrypt for password hashing**, replacing the SHA-256-based approach used for the
       old shared password. Alternatives: `crypto.scrypt`, Argon2.
 - [x] **Tags become per-user**, not global.
+- [x] **Structured ingredients: rule-based parser, two-tier unit vocabulary**
+      (superseded the "freeform text, not normalised tables" call below, for
+      `ingredients` specifically). Alternatives: an LLM call per line, a full
+      NLP parsing library, doing nothing (stay freeform forever).
 - [x] **URL capture: native fetch plus JSON-LD parsing** (cheerio if needed). Alternatives:
       a scraping service, a headless browser, a paid recipe API.
 - [x] **Instagram capture: oEmbed endpoint.** Alternatives: Graph API, scraping, manual
@@ -49,8 +53,9 @@ in my own words. Checked means the entry is written.
 - [x] Querying the DB directly in a Server Component vs building an API route (days 3-4)
 - [x] Server Action vs Route Handler for mutations (days 5-6)
 - [x] revalidatePath and the caching model: when a page is cached and what busts it (days 5-6)
-- [x] Data model shape: `ingredients` and `steps` as freeform text, not normalised tables;
-      the `recipe_tag` many-to-many (already in the schema)
+- [x] Data model shape (original v1 call): `ingredients` and `steps` as freeform text, not
+      normalised tables; the `recipe_tag` many-to-many. `ingredients` specifically
+      superseded 18/09/2026, see "Structured ingredients" above; `steps` stays freeform.
 - [x] `searchParams` in the URL as filter and search state, not React state (day 8)
 - [x] The "want to make" toggle as the single client component, `useOptimistic` (day 9)
 - [x] Testing: Vitest for units, Playwright for the RSC / Server Action flows
@@ -62,6 +67,102 @@ in my own words. Checked means the entry is written.
 - [x] Cutting Instagram capture
 - [x] No login rate limiting, despite the finding
 - [x] `getCurrentUser()` re-derivation instead of threading auth state through headers
+- [x] `updateRecipe`'s missing ownership pre-check, found while adding structured
+      ingredients (a real cross-user data-integrity gap, not just a hypothetical)
+
+---
+
+## `updateRecipe`'s missing ownership pre-check
+
+**Date:** 18/09/2026
+
+**Context:** Adding `setRecipeIngredients` to `updateRecipe` (structured ingredients,
+below) meant looking closely at exactly where that function runs relative to the
+ownership check, and I found it was already wrong for `setRecipeTags`, which has been
+there since Phase 1. `updateRecipe`'s `UPDATE recipe ... WHERE id = ? AND owner_id = ?`
+correctly no-ops for a recipe you don't own, but `setRecipeTags(id, ...)` ran
+unconditionally right after it regardless of whether that UPDATE matched anything. Its
+own writes (`recipeTags` delete/insert) are scoped only by `recipeId`, not ownership,
+tags themselves are ownerId-checked, but the *link* between a tag and a recipe isn't. A
+direct POST to `updateRecipe` with someone else's recipe id would leave the victim's
+recipe untouched but could still attach your own tags to it, or (once
+`setRecipeIngredients` existed) delete and replace *their* ingredient rows outright, since
+neither function independently re-checks who owns `id`.
+
+**Options I considered:**
+- Push an ownership check into `setRecipeTags`/`setRecipeIngredients` themselves (each
+  takes an extra query to verify, redundant with the UPDATE's own WHERE clause doing
+  almost the same check).
+- Check ownership once, up front in `updateRecipe`, before any write happens, mirroring
+  `deleteRecipe`'s existing pre-check.
+
+**Chose:** the second, matching `deleteRecipe`.
+
+**Why:** `deleteRecipe` already solved this exact shape of problem for the same reason
+(Blob-storage deletes that weren't gated by ownership, found during Phase 1). One
+`SELECT ... WHERE id = ? AND owner_id = ? LIMIT 1` before anything else runs means every
+following step, the `recipes` UPDATE, `setRecipeTags`, `setRecipeIngredients`, only ever
+touches a recipe that's actually yours, instead of each write function needing to
+re-derive that independently (and one of them not doing so, silently, is exactly how this
+gap existed for two phases before I noticed it).
+
+**What I'd revisit this under:** nothing specific, this is the same pattern already used
+elsewhere now, consistent rather than a one-off.
+
+**Confidence:** high. Found by tracing exactly what a new write path would touch, not by
+a security audit, worth remembering: adding an adjacent feature is a good time to recheck
+an existing one's assumptions, not just extend them.
+
+---
+
+## Structured ingredients: rule-based parser, two-tier unit vocabulary
+
+**Date:** 18/09/2026
+
+**Context:** `recipe.ingredients` was freeform text, one line per ingredient, since day
+one, explicitly deferred (see the "Data model shape" entry below and `SPEC.md`'s original
+framing). Unit conversion and nutrition counting, both now on the roadmap, need
+`{quantity, unit, name}` per ingredient to do any math at all. Reliably parsing "2 cups
+flour" out of arbitrary freeform text is a genuinely hard, long-tail problem, real recipes
+constantly use fractions, mixed numbers, informal count words ("a stick of butter", "2
+cloves garlic"), and inconsistent word order.
+
+**Options I considered:**
+- An LLM call per ingredient line: probably the most accurate, but a real per-recipe cost
+  and latency for something that runs on every save, and total overkill for the 80% of
+  lines that are already trivially "number, unit, name."
+- A full NLP/grammar-based parser (a proper tokenizer, part-of-speech tagging): the
+  "correct" way to do this well, but a huge amount of complexity for a hobby project, and
+  still wouldn't be perfect.
+- A small ordered set of regex rules, best-effort, explicitly not attempting the hard
+  long-tail cases, same shape as `capture.ts`'s JSON-LD parsing: automate the easy case,
+  leave anything ambiguous as an honest "couldn't parse this" (the whole line becomes
+  `name`, `quantity`/`unit` stay null).
+
+**Chose:** the regex rule set, with a deliberate two-tier unit vocabulary:
+`MEASURE_UNITS` (g, kg, ml, l, tsp, tbsp, cup, oz, lb, the real convertible units) and
+`COUNT_WORDS` (clove, pinch, stick, slice, can, tin, packet, bunch, piece, informal but
+common counting words). Both get recognised and stripped from `name` for cleaner data, but
+only `MEASURE_UNITS` membership means anything to the unit converter later.
+
+**Why:** Recognising only strict measurement units (the original rougher plan) would
+leave "2 cloves garlic" and "1 stick butter" with the count word stuck in `name`, real
+quality loss for exactly the kind of recipes a baker actually writes. But treating a
+"clove" as if it converts the way "g" does would be wrong, and would force the unit
+converter to special-case non-measurements later. Keeping the two lists separate gets both:
+clean `name` extraction now, and an unambiguous "is this a real measurement" check for
+Phase 3 later (`unit in MEASURE_UNITS`), with no risk of accidentally trying to convert a
+"clove" into millilitres.
+
+**What I'd revisit this under:** if the parser's failure rate turns out high enough in
+practice to be annoying (no correction UI exists yet, see LOG, that's deferred to whichever
+phase first displays structured fields on screen), or if a specific class of real recipes
+(this project's own test data skews toward baking) exposes a pattern worth a dedicated rule.
+
+**Confidence:** medium-high on the vocabulary split, it's a clean design with real
+justification; lower on the parser's real-world hit rate until it's actually been used on
+enough recipes to know, which is exactly why no data-corrupting auto-backfill runs against
+existing recipes, see the Migration note in LOG.
 
 ---
 
@@ -799,6 +900,14 @@ recipe.
 as data (a shopping list, "can I make this now", scaling). That is the project 2 boundary.
 
 **Confidence:** high. The scope line is drawn in the SPEC and this respects it.
+
+**Update, 18/09/2026:** that condition happened, the user deliberately moved the "project
+2" boundary for this project (see LOG's "Growing past v1" entries) once a unit converter
+and nutrition counter went on the roadmap. `ingredients` now also has a `recipe_ingredient`
+table alongside this `text` column, see "Structured ingredients" in DECISIONS. Notably,
+`ingredients` didn't get *replaced*, both coexist: this column is still the display source
+of truth for every recipe, old or new, the new table is additive. `steps` stays exactly as
+this entry describes, no structured-steps need has come up.
 
 ---
 

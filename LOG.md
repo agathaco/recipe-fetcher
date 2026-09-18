@@ -634,3 +634,58 @@ instead of scattering more ternaries, now that there are three moods instead of 
   exist, confirmed the real 404 page renders correctly, deleted the account after.
 - typecheck/lint/test(41)/build all clean.
 
+## Phase 2: Structured ingredients
+
+The next phase on the roadmap (see the plan doc's "growing past v1" epic): `ingredients`
+was one freeform `text` column since day one, deliberately, see DECISIONS's "Data model:
+flat" entry, whose own "what I'd revisit this under" predicted exactly this. Unit
+conversion and nutrition counting (later phases) both need `{quantity, unit, name}` per
+ingredient to do any math at all.
+
+- New `recipe_ingredient` table (`db/schema.ts`): `recipeId`, `position`, `rawText` (the
+  line as typed, always the fallback), `quantity` (`doublePrecision`, not Drizzle's
+  `numeric`, which returns a string by default), `unit`, `name`. `recipe.ingredients`
+  stays exactly as it was, both are written on every save, this table is additive, not a
+  replacement, see DECISIONS.
+- New `app/lib/ingredients.ts`: `parseIngredientLine()`, a pure, best-effort regex parser
+  (not NLP), handles integers/decimals/fractions/mixed numbers ("1 1/2"), a two-tier unit
+  vocabulary (`MEASURE_UNITS` for real convertible units, `COUNT_WORDS` for informal ones
+  like "clove"/"stick"/"pinch" that still get recognised for cleaner `name` extraction
+  without pretending they convert to anything), see DECISIONS for the full reasoning. 22
+  new unit tests (`app/lib/ingredients.test.ts`) against realistic lines pulled from this
+  project's own seed data and common baking patterns (fractions, informal units, comma-
+  joined lines with no number, unit words that trail instead of lead the noun and so don't
+  parse, an honest documented miss rather than a silent wrong guess).
+- `app/lib/actions.ts`: new `setRecipeIngredients()`, called from both `createRecipe` and
+  `updateRecipe` right next to the existing `setRecipeTags()`. Delete-then-reinsert, not a
+  diff like tags use, ingredient rows are entirely private to one recipe, no cross-recipe
+  sharing to preserve.
+- **Real bug found and fixed while wiring this in, not hypothetical:** `updateRecipe` had
+  no ownership pre-check before calling `setRecipeTags`. The recipe `UPDATE` itself was
+  correctly scoped by `ownerId`, but `setRecipeTags` (and now `setRecipeIngredients`)
+  write to join/child rows scoped only by `recipeId`, not ownership, so a direct POST to
+  `updateRecipe` with someone else's recipe id could have attached your own tags to their
+  recipe, or (once ingredients existed) replaced their ingredient rows outright, even
+  though the recipe's own title/content stayed untouched. Fixed by adding the same
+  `SELECT ... WHERE id = ? AND owner_id = ? LIMIT 1` pre-check `deleteRecipe` already had,
+  before any write runs. Full writeup in DECISIONS.
+- **Deliberately not built this phase:** no UI change (ingredient entry is still one plain
+  text row, nothing on screen shows quantity/unit separately yet, so a "correct a bad
+  parse" UI has nothing to attach to, deferred to whichever of the unit-converter or
+  nutrition phases first renders structured fields), no auto-backfill of existing recipes
+  (parsing old text blobs in place risks silently corrupting ingredients that already
+  display correctly), no `app/lib/data.ts` read-path changes (nothing reads
+  `recipe_ingredient` yet).
+- Migration (`0007_aspiring_starfox.sql`): a plain `CREATE TABLE`, no existing rows to
+  worry about, none of Phase 1's nullable-then-tighten dance needed. Applied directly.
+- Verified against the real database, not just tests: created a recipe with realistic
+  ingredient lines (fractions, informal units) through the real UI, queried
+  `recipe_ingredient` directly and confirmed every row parsed as expected; edited a
+  recipe's ingredients and confirmed the old rows were replaced, not accumulated; confirmed
+  every one of the real, pre-existing recipes still has zero `recipe_ingredient` rows,
+  untouched. typecheck/lint/test(63)/build/e2e(5) all clean.
+- **Taught:** designing an additive schema change that changes nothing currently on
+  screen, a delete-then-reinsert vs. diff-based upsert tradeoff (ownership scope is what
+  decides it, not row count), and that adding a feature next to existing code is a good
+  moment to re-verify that code's assumptions, not just extend them, which is exactly how
+  the `updateRecipe` gap got caught.
