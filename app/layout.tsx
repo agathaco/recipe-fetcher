@@ -25,10 +25,10 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
-    default: "Recipes",
+    default: "Miam",
     // Child pages set their own title (a string, via `metadata`, or via
-    // `generateMetadata`); this template wraps it, e.g. "Add a recipe · Recipes".
-    template: "%s · Recipes",
+    // `generateMetadata`); this template wraps it, e.g. "Add a recipe · Miam".
+    template: "%s · Miam",
   },
   description: "Capture, store, and find recipes.",
 };

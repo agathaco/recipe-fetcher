@@ -568,3 +568,69 @@ isolated recipe collection.
   across a request, and confronting a decision this project's own docs had predicted
   ("Password auth in proxy.ts" said flipping to a second user would mean Auth.js) instead
   of quietly doing something else.
+
+## Named the app: Miam, with a kawaii dumpling mascot
+
+The app finally has a real name: **Miam** (French for "yum"), picked over an earlier
+rejected option ("Mise"). `recipe-fetcher` stays the repo/package name under the hood,
+only the product-facing name changed (browser tab title, login/signup card, README).
+
+The user wanted a cute theme built around their daughter's favourite squishy toy, a kawaii
+dumpling. Confirmed via `AskUserQuestion` before building anything: a full recurring
+mascot (not just a palette tweak), since illustration work is expensive to redo blind and
+this project's own theme history already needed 3 passes once before checking direction
+first.
+
+- New `components/dumpling-mascot.tsx`: one SVG, two moods (`happy`, `sleepy`), literal
+  warm cream/blush colors rather than theme tokens, since it's a brand illustration with
+  its own palette, not UI chrome (the app has no dark-mode toggle yet to track anyway).
+- **Prototyped with a real screenshot loop, not by eyeballing raw SVG markup.** No local
+  SVG-to-PNG tool existed (`rsvg-convert`/`imagemagick`/etc all missing), so I wrote the
+  candidate SVGs to a throwaway HTML file in the scratchpad and rendered it with
+  Playwright's own `chromium.launch({ channel: "chrome" })` (the same system Chrome the
+  e2e suite already uses) to get a real PNG to look at, including checking the favicon
+  actually reads at true 32px, not just scaled up. Reusable trick for any future visual
+  work in a session with no browser tooling.
+- Wired in three places: the no-photo placeholder on recipe cards (replacing the
+  `UtensilsCrossed` icon), the empty-list state (`sleepy` mood, "nothing here yet" reads
+  as the dumpling napping), and above the "Miam" wordmark on the login/signup cards.
+  `app/icon.svg` (the favicon) got a matching one-color version of the same silhouette,
+  replacing the whisk icon, on the same gradient background.
+- Verified for real against a live server, not just the isolated prototype: signed up temp
+  accounts via Playwright, screenshotted the actual empty state and card placeholder in
+  place, deleted the accounts after. typecheck/lint/test(41)/build all clean.
+- **Not done yet:** more moods (a "confused" dumpling for 404/error pages is the obvious
+  next candidate, flagged in IDEAS.md), and the rest of the "cute theme" (illustration
+  style is set; palette itself is unchanged, still the existing magenta/purple gradient).
+
+**Redesigned same day**, after the user pointed at a reference (a kawaii steamed-bao
+illustration): swapped the body shape from a crescent gyoza-style pleated dumpling to a
+round bao bun, with a twisted top-knot, pleat creases fanning from it, and a small "char
+siu" red dot, the classic bao tell. Same two-mood API (`happy`/`sleepy`), same file
+(`components/dumpling-mascot.tsx`), same integration points, just a different silhouette;
+also added steam wisps above the `happy` mood only (fresh off the steamer; `sleepy` has
+gone cold and quiet). Re-verified the same way: prototyped via the Playwright-screenshot
+loop (including the small-size and true-32px-favicon checks) before touching the real
+component, then confirmed the live integration again with a fresh temp account.
+
+## Third mascot mood: confused, for 404/error pages
+
+Closed out the mascot's flagged next candidate from IDEAS.md: a `mood="confused"` (uneven
+raised eyebrows, wavy uncertain mouth, a floating "?") added to
+`components/dumpling-mascot.tsx` alongside `happy`/`sleepy`. Refactored the shared
+arm/blush values (rotation, position, opacity) into one small per-mood lookup table
+instead of scattering more ternaries, now that there are three moods instead of two.
+
+- New `app/not-found.tsx`: Next's 404 file convention had no custom page before this,
+  just the framework default. Now shows the confused mascot, a heading, and a link home.
+- `app/error.tsx` (the unexpected-render-throw boundary) got the same mascot above its
+  existing "Something went wrong" heading.
+- **Deliberately not** `app/global-error.tsx`: that boundary already stays inline-styled
+  and Tailwind-free on purpose (it's the last resort if the root layout itself throws), so
+  it doesn't reach for the mascot component either, same reasoning, now stated explicitly
+  in its own top comment instead of being an unexplained gap.
+- Prototyped and screenshotted before touching the real component, same loop as the bao
+  redesign. Verified live: signed up a temp account, navigated to a recipe id that doesn't
+  exist, confirmed the real 404 page renders correctly, deleted the account after.
+- typecheck/lint/test(41)/build all clean.
+

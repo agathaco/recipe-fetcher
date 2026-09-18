@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DumplingMascot } from "@/components/dumpling-mascot";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signup } from "@/app/lib/actions";
@@ -18,8 +19,9 @@ export default async function SignupPage({
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-4 py-12">
       <Card className="[--card-spacing:--spacing(6)]">
-        <CardHeader>
-          <CardTitle className="text-brand text-xl">recipe-fetcher</CardTitle>
+        <CardHeader className="items-center text-center">
+          <DumplingMascot className="size-16" />
+          <CardTitle className="text-brand text-xl">Miam</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={signup} className="space-y-4">

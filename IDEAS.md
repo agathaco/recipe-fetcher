@@ -40,7 +40,10 @@ Still open:
 - Highlight the current step on the detail page.
 - Dark mode toggle (`.dark` tokens already exist).
 - Mobile pass.
-- Better empty states.
+- ~~Better empty states~~ done for the recipe list (16/09) and now the 404/error pages too
+  (18/09, `mood="confused"`, `app/not-found.tsx` + `app/error.tsx`, see LOG). Deliberately
+  not on `global-error.tsx`, that boundary stays plain/dependency-free on purpose (see its
+  own top comment). No more obvious gaps for the mascot right now.
 - A sticky "Save" bar on the long form.
 - **"Want to make" marker, redesigned.** Removed from the list-card corner (11/09, the
   redesign pass) because the old star-overlay didn't fit the flatter card and wasn't

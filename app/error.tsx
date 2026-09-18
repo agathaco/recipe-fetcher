@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { DumplingMascot } from "@/components/dumpling-mascot";
 import { Button, buttonVariants } from "@/components/ui/button";
 
 export default function Error({
@@ -24,7 +25,8 @@ export default function Error({
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-4 text-center">
-      <h1 className="text-brand text-2xl font-bold tracking-tight">
+      <DumplingMascot mood="confused" className="size-24" />
+      <h1 className="text-brand mt-4 text-2xl font-bold tracking-tight">
         Something went wrong
       </h1>
       <p className="text-muted-foreground mt-2 text-sm">

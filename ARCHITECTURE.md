@@ -185,6 +185,8 @@ now that the backfill ran, see LOG's "Growing past v1: Phase 1" entry.
 | `app/components/user-menu.tsx` | the header avatar + account menu (replaces the old plain Sign out button) | `"use client"`, shadcn `Avatar`/`DropdownMenu` (Base UI), `logout` called from `onClick` like `toggleWantToMake` |
 | `app/api/upload/route.ts` | mints upload tokens for `@vercel/blob/client`, one per file | Route Handler, not a Server Action, `@vercel/blob`'s client-upload contract needs a plain HTTP endpoint the browser SDK calls directly |
 | `components/tag-pill.tsx` | colour-per-tag pill + `tagColorClasses` helper | plain component |
+| `components/dumpling-mascot.tsx` | Miam's mascot (kawaii bao bun, `happy`/`sleepy`/`confused` moods) | plain component, no interactivity so no `"use client"`; used as the no-photo card placeholder, the empty-list state, login/signup, and the 404/error pages |
+| `app/not-found.tsx` | 404 page (missing route, or `notFound()` from a recipe page) | Next's file convention, `mood="confused"` |
 | `components/ui/sonner.tsx` | the toast outlet, mounted once in the layout | `"use client"` |
 | `proxy.ts` | the authentication gate (authorization is the data layer's job, see `app/lib/session.ts` and every `ownerId` check in `data.ts`/`actions.ts`) | runs before every matched request, on the Node.js runtime (Next 16's default for Proxy, not Edge); looks the session up in `session` on every request, redirects to `/login` if missing, unknown, or expired |
 | `app/globals.css` | Tailwind entry + shadcn theme tokens (fuchsia-purple primary, `.text-brand` gradient, `--font-heading` = Bricolage Grotesque) | (not Next specific) |
@@ -244,6 +246,10 @@ Three layers, matching the three ways things fail:
   and offers "Try again" (`reset`) or a link home. `app/global-error.tsx` is the same idea
   one level up, for the root layout. `getRecipeById` deliberately does *not* swallow DB
   errors as "not found" any more; only a syntactically invalid uuid is a 404.
+- **Missing/not-yours** (`notFound()`, a deliberate signal, not a throw): `app/not-found.tsx`
+  renders Next's 404 UI. Both `error.tsx` and `not-found.tsx` use
+  `<DumplingMascot mood="confused">`; `global-error.tsx` deliberately doesn't (see its own
+  top comment on why it stays plain).
 - **Form save failures** (validation or a write that fails): `createRecipe` / `updateRecipe`
   return `{ error }` instead of throwing, and `useActionState` in `recipe-form.tsx` renders
   it inline without losing what was typed.

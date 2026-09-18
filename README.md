@@ -1,7 +1,8 @@
-# recipe-fetcher
+# Miam
 
 Capture, store, and find recipes, so "I feel like baking" starts with a list instead of
-scrolling Instagram saves.
+scrolling Instagram saves. Named "Miam" (French for "yum") after outgrowing its original
+working name, `recipe-fetcher`, still the repo/package name under the hood.
 
 ## The problem
 

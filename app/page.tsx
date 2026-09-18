@@ -1,9 +1,10 @@
-import { Plus, UtensilsCrossed } from "lucide-react";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 
 import { SearchBox } from "@/app/components/search-box";
 import { SortSelect } from "@/app/components/sort-select";
 import { cn } from "cn";
+import { DumplingMascot } from "@/components/dumpling-mascot";
 import { StarRow } from "@/components/star-row";
 import { TagPill, tagColorClasses } from "@/components/tag-pill";
 import { badgeVariants } from "@/components/ui/badge";
@@ -100,19 +101,22 @@ export default async function HomePage({
       )}
 
       {allRecipes.length === 0 ? (
-        <p className="text-muted-foreground mt-10 text-sm">
-          {tag || q ? (
-            "No recipes match that filter."
-          ) : (
-            <>
-              Nothing here yet.{" "}
-              <Link href="/recipes/new" className="text-primary underline">
-                Add one
-              </Link>
-              .
-            </>
-          )}
-        </p>
+        <div className="mt-10 flex flex-col items-center gap-3 text-center">
+          <DumplingMascot mood="sleepy" plate className="size-28" />
+          <p className="text-muted-foreground text-sm">
+            {tag || q ? (
+              "No recipes match that filter."
+            ) : (
+              <>
+                Nothing here yet.{" "}
+                <Link href="/recipes/new" className="text-primary underline">
+                  Add one
+                </Link>
+                .
+              </>
+            )}
+          </p>
+        </div>
       ) : (
         <div className="mt-6 grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {allRecipes.map((recipe) => (
@@ -130,8 +134,8 @@ export default async function HomePage({
                       className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                   ) : (
-                    <div className="text-muted-foreground/40 flex size-full items-center justify-center">
-                      <UtensilsCrossed className="size-8" />
+                    <div className="flex size-full items-center justify-center">
+                      <DumplingMascot className="size-14 opacity-70" />
                     </div>
                   )}
                 </div>

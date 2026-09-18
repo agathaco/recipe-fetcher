@@ -3,6 +3,10 @@
 // Last-resort boundary for errors thrown by the root layout itself (where the
 // normal error.tsx can't help, because it renders *inside* that layout). It
 // replaces the whole document, so it has to bring its own <html>/<body>.
+// Deliberately plain inline styles, no Tailwind, no DumplingMascot: if the
+// root layout itself is failing, this is the one place that shouldn't lean
+// on anything that could plausibly be implicated (the CSS pipeline, an
+// imported component), same reasoning as bringing its own <html>/<body>.
 
 import { useEffect } from "react";
 
