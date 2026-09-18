@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { AUTH_COOKIE, randomToken, sessionId, sha256Hex } from "./auth";
+import {
+  AUTH_COOKIE,
+  hashPassword,
+  randomToken,
+  sessionId,
+  sha256Hex,
+  verifyPassword,
+} from "./auth";
 
 describe("sha256Hex", () => {
   it("produces the known SHA-256 hex of a string", async () => {
@@ -41,4 +48,33 @@ describe("AUTH_COOKIE", () => {
   it("is a stable name", () => {
     expect(AUTH_COOKIE).toBe("rf_auth");
   });
+});
+
+describe("hashPassword / verifyPassword", () => {
+  it("verifies a password against its own hash", async () => {
+    const hash = await hashPassword("correct horse battery staple");
+    expect(await verifyPassword("correct horse battery staple", hash)).toBe(true);
+  });
+
+  it("rejects a wrong password", async () => {
+    const hash = await hashPassword("correct horse battery staple");
+    expect(await verifyPassword("wrong password", hash)).toBe(false);
+  });
+
+  // bcryptjs is pure JS (no native binary, see DECISIONS), so 12-round hashing
+  // is genuinely slow, this test does four such operations (two hashes, two
+  // verifies), past Vitest's default 5s test timeout on a loaded machine.
+  // Not a bug, just a slow-test budget, hence the explicit longer timeout.
+  it(
+    "salts each hash differently, even for the same password",
+    async () => {
+      const [a, b] = await Promise.all([hashPassword("hunter2"), hashPassword("hunter2")]);
+      expect(a).not.toBe(b);
+      // ...but both still verify the same plaintext, since bcrypt embeds the
+      // salt in the hash string itself rather than needing it passed back in.
+      expect(await verifyPassword("hunter2", a)).toBe(true);
+      expect(await verifyPassword("hunter2", b)).toBe(true);
+    },
+    15_000,
+  );
 });

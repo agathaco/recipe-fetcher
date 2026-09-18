@@ -30,8 +30,13 @@ in my own words. Checked means the entry is written.
       styled-components, Panda CSS.
 - [x] **shadcn/ui** for components (post-build UI pass). Alternatives: Mantine, MUI, Radix
       primitives hand-styled, keep raw Tailwind.
-- [x] **Auth: shared password checked in middleware.** Alternatives: Auth.js, Clerk, Lucia,
-      Supabase Auth.
+- [x] **Auth: shared password checked in middleware** (superseded 16/09/2026, see below).
+      Alternatives: Auth.js, Clerk, Lucia, Supabase Auth.
+- [x] **Real multi-user accounts**, hand-rolled again rather than adopting Auth.js.
+      Alternatives: Auth.js, Clerk, Lucia, Supabase Auth.
+- [x] **bcrypt for password hashing**, replacing the SHA-256-based approach used for the
+      old shared password. Alternatives: `crypto.scrypt`, Argon2.
+- [x] **Tags become per-user**, not global.
 - [x] **URL capture: native fetch plus JSON-LD parsing** (cheerio if needed). Alternatives:
       a scraping service, a headless browser, a paid recipe API.
 - [x] **Instagram capture: oEmbed endpoint.** Alternatives: Graph API, scraping, manual
@@ -56,6 +61,154 @@ in my own words. Checked means the entry is written.
 - [x] Photo uploads: Vercel Blob, client-direct, via a Route Handler
 - [x] Cutting Instagram capture
 - [x] No login rate limiting, despite the finding
+- [x] `getCurrentUser()` re-derivation instead of threading auth state through headers
+
+---
+
+## `getCurrentUser()` re-derivation instead of threading auth state through headers
+
+**Date:** 16/09/2026
+
+**Context:** `proxy.ts` already knows who's signed in (it has to, to decide whether to
+redirect to `/login`), but Next has no built-in channel to pass data from Proxy to a
+Server Component or Server Action downstream. Every page and mutation that now needs
+`ownerId` has to get it from somewhere.
+
+**Options I considered:**
+- Have `proxy.ts` set a custom request header (e.g. `x-user-id`) and read it back with
+  `headers()` in Server Components/Actions.
+- Re-run the same cookie -> session -> user lookup a second time, in a `getCurrentUser()`
+  helper called directly wherever the data is needed.
+
+**Chose:** re-derivation, via `app/lib/session.ts`'s `getCurrentUser()`.
+
+**Why:** the header approach works but means trusting a header nothing stops another
+part of the stack from spoofing if it's ever misconfigured, and it silently couples
+every consumer to a specific proxy implementation detail. Re-deriving is one extra
+indexed-primary-key lookup (`session.id`, already the query proxy.ts runs), on Neon's
+HTTP driver that's a few milliseconds, and the project already treats DB reads as cheap
+and unworried-about (see the `force-dynamic` and "querying Postgres directly" entries
+below). `React.cache()` wraps it so multiple call sites in one request (a page plus a
+layout, say) collapse to a single query instead of one each.
+
+**What I'd revisit this under:** a much colder DB round-trip (a non-serverless driver
+with real connection setup cost), or needing the same session data in genuinely
+non-Server-Component contexts (a Route Handler with no natural place to call an async
+helper) where the header would actually save real work.
+
+**Confidence:** high.
+
+---
+
+## Tags become per-user, not global
+
+**Date:** 16/09/2026
+
+**Context:** `tag` had a single global `unique(name)` constraint: one "vegan" tag, shared
+by whoever used it. With real separate accounts, one user's custom tag showing up in
+another user's autocomplete dropdown is a real data leak (it names, at minimum, that a
+tag with that word exists), not just an odd UX wrinkle.
+
+**Options I considered:**
+- Leave tags global, shared across all accounts, cheap and simple.
+- Scope tags per-user: add `ownerId`, change the unique constraint to `(ownerId, name)`.
+
+**Chose:** per-user tags.
+
+**Why:** a tag is really shorthand the person who created it uses to organise their own
+recipes, not a shared taxonomy anyone agreed on. Two people independently having a
+"vegan" tag isn't a collision to dedupe, it's two unrelated facts that happen to use the
+same word. The cost is small: one added column, one composite unique constraint instead
+of a bare one, and `setRecipeTags`'s upsert/lookup now filters by `ownerId` too.
+
+**What I'd revisit this under:** a household/shared-collection mode, if that ever gets
+built on top of this (explicitly ruled out for the account model itself, see the
+multi-user plan), shared tags might make sense scoped to the household instead of the
+individual account.
+
+**Confidence:** high.
+
+---
+
+## bcrypt for password hashing, not sha256Hex
+
+**Date:** 16/09/2026
+
+**Context:** Real accounts need a password stored in a way that survives a leaked `user`
+table. The codebase already has `sha256Hex`, used for hashing session tokens and,
+previously, the single shared `APP_PASSWORD`.
+
+**Options I considered:**
+- `sha256Hex` (already in the codebase): fast, unsalted, general-purpose hash.
+- `crypto.scrypt` (Node built-in, no dependency): adaptive, salted, memory-hard.
+- bcrypt-family (`bcryptjs`, pure JS, or native `bcrypt`): adaptive, salted, the
+  long-standing default for password storage.
+- Argon2: newer, generally considered the strongest current choice, less battle-tested
+  tooling in the JS ecosystem than bcrypt.
+
+**Chose:** `bcryptjs`.
+
+**Why:** `sha256Hex` was fine for a session token (256 bits of fresh randomness, nothing
+to guess) and was fine-ish for the old `APP_PASSWORD` (a 150-bit machine-generated
+string, see the login-rate-limiting entry above), but a human-chosen account password is
+exactly the case a fast, unsalted hash is bad at: a leaked table lets an attacker hash a
+big password list once and compare against every row. bcrypt is salted per-hash (two
+people with the same password get different hashes) and deliberately slow, so that
+offline attack gets expensive per-guess instead of being one bulk hash-and-compare pass.
+Chose `bcryptjs` over native `bcrypt` specifically for serverless: no native binary to
+compile or ship, which matters for Vercel's cold starts; chose it over `crypto.scrypt`
+(which would've added zero dependencies) because bcrypt's compare function is a single
+call with the work factor baked into the stored hash string, `scrypt` needs the caller to
+manage and store its own cost parameters and salt correctly, more to get wrong by hand.
+
+**What I'd revisit this under:** a security review flagging bcrypt's 72-byte password
+truncation as a real problem here (it isn't, at signup's 8-character minimum), or wanting
+Argon2's stronger guarantees enough to pull in `argon2` and its native binary.
+
+**Confidence:** high.
+
+---
+
+## Real multi-user accounts, hand-rolled again, not Auth.js
+
+**Date:** 16/09/2026
+
+**Context:** the "Password auth in proxy.ts" entry below predicted its own reversal
+condition explicitly: "a second user... flips it entirely... At that point it's Auth.js,
+not a bigger password." That condition is now true, the app is growing real per-account
+data isolation. Worth actually confronting that prediction rather than quietly not doing
+it.
+
+**Options I considered:**
+- Auth.js (NextAuth): the standard Next.js auth library, session/JWT strategies, OAuth
+  providers, credentials provider for email+password, adapter for Drizzle.
+- Clerk / Lucia / Supabase Auth: hosted or lighter-weight alternatives, similar tradeoffs.
+- Extend the existing hand-rolled session system: add a `user` table, bcrypt the
+  password, add `userId` to `session`, keep everything else (the cookie, the SHA-256
+  session-id hashing, the `proxy.ts` gate shape) as-is.
+
+**Chose:** extend the hand-rolled system.
+
+**Why:** the earlier entry's reasoning for the shared password was "nothing a real auth
+system's features would do here", and that's now only half true: real accounts are
+needed, but nothing else Auth.js brings (OAuth providers, JWT strategies, email
+verification flows, a plugin adapter layer) is. The session mechanics this project
+already built and understands (opaque token, SHA-256'd before storage, a `session` table
+row per login, `proxy.ts` checking it) don't change shape at all when a second user
+shows up, they just gain a `userId` column. Swapping to Auth.js here would mean learning
+its adapter/provider/callback model instead of extending code I already wrote and can
+explain line by line, which is the whole point of this project per the rule at the top
+of this file. The actual new surface area, real ownership checks in the data layer, is
+identical either way: Auth.js doesn't know which rows in `recipe` belong to which user,
+that has to be hand-written regardless of what issues the session.
+
+**What I'd revisit this under:** wanting social login (Google/GitHub sign-in), email
+verification, or password reset flows, all genuinely nontrivial to hand-roll correctly
+and exactly what a library like Auth.js earns its keep on. None of those are in scope
+yet.
+
+**Confidence:** high on the reasoning, medium on how long "just extend it" keeps holding
+as more auth features get requested.
 
 ---
 
@@ -97,6 +250,16 @@ specific to a long machine-generated one), or a second user, at which point real
 **Confidence:** high. The math on the password's entropy is straightforward, and this is
 the same honest-tradeoff shape as the SSRF and shared-test-database gaps already
 documented elsewhere in this file.
+
+**Update, 16/09/2026:** both conditions in "what I'd revisit this under" are now true.
+Real accounts exist (see "Real multi-user accounts" above) with an 8-character minimum,
+user-chosen password, nowhere near the old `APP_PASSWORD`'s ~150 bits, and there's a real
+second user now, in principle. The entropy argument this entry's "no" rested on no longer
+holds; the gap is more real than it was. Still deliberately not fixed in this pass (Phase
+1 was scoped to accounts existing at all, not hardening login itself), but it's now a
+correctly-updated known gap rather than a stale one: worth revisiting properly (a fixed
+post-failure delay is the cheap first move) before this app has data worth someone
+actually trying to brute-force into.
 
 ---
 

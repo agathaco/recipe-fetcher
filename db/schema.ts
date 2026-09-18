@@ -6,6 +6,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -13,8 +14,21 @@ import {
 // tables: the ingredient graph is project 2's problem. The one modelling concept
 // here is the `recipe_tag` many-to-many.
 
+// Real per-account credentials. Added when the app grew from single-shared-
+// password to real multi-user auth; every recipe and tag now belongs to one
+// of these, enforced in the data layer, not just at the login gate.
+export const users = pgTable("user", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const recipes = pgTable("recipe", {
   id: uuid("id").primaryKey().defaultRandom(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   sourceUrl: text("source_url"),
   sourceType: text("source_type"), // 'web' | 'manual' (was also 'instagram'; existing rows may still have it)
@@ -45,14 +59,26 @@ export const recipes = pgTable("recipe", {
 // per-device (see DECISIONS: "Real sessions, not a static cookie").
 export const sessions = pgTable("session", {
   id: text("id").primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
-export const tags = pgTable("tag", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull().unique(),
-});
+// Tags are per-user, not global: two people can both have a "vegan" tag, and
+// neither sees the other's. `unique` is now (ownerId, name), not name alone.
+export const tags = pgTable(
+  "tag",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+  },
+  (t) => [unique().on(t.ownerId, t.name)],
+);
 
 // A recipe's photo gallery: one-to-many, separate from `recipe.imageUrl`
 // (the pasted/captured cover image shown on cards) on purpose. Uploading a
@@ -81,7 +107,14 @@ export const recipeTags = pgTable(
 );
 
 // Relations let the Drizzle query API walk recipe -> tags without hand-written joins.
-export const recipesRelations = relations(recipes, ({ many }) => ({
+export const usersRelations = relations(users, ({ many }) => ({
+  recipes: many(recipes),
+  tags: many(tags),
+  sessions: many(sessions),
+}));
+
+export const recipesRelations = relations(recipes, ({ one, many }) => ({
+  owner: one(users, { fields: [recipes.ownerId], references: [users.id] }),
   recipeTags: many(recipeTags),
   images: many(recipeImages),
 }));
@@ -93,7 +126,8 @@ export const recipeImagesRelations = relations(recipeImages, ({ one }) => ({
   }),
 }));
 
-export const tagsRelations = relations(tags, ({ many }) => ({
+export const tagsRelations = relations(tags, ({ one, many }) => ({
+  owner: one(users, { fields: [tags.ownerId], references: [users.id] }),
   recipeTags: many(recipeTags),
 }));
 

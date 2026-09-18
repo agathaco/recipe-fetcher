@@ -8,8 +8,23 @@ import { redirect } from "next/navigation";
 import { del } from "@vercel/blob";
 
 import { db } from "@/db";
-import { recipeImages, recipeTags, recipes, sessions, tags } from "@/db/schema";
-import { AUTH_COOKIE, SESSION_TTL_MS, randomToken, sessionId, timingSafeEqual } from "@/app/lib/auth";
+import {
+  recipeImages,
+  recipeTags,
+  recipes,
+  sessions,
+  tags,
+  users,
+} from "@/db/schema";
+import {
+  AUTH_COOKIE,
+  SESSION_TTL_MS,
+  hashPassword,
+  randomToken,
+  sessionId,
+  verifyPassword,
+} from "@/app/lib/auth";
+import { requireCurrentUser } from "@/app/lib/session";
 import { captureFromWebUrl } from "@/app/lib/capture";
 
 // Everything in this file runs only on the server. It is imported by forms and
@@ -51,7 +66,11 @@ function linesFromRows(formData: FormData, name: string): string | null {
 // tagless and a save that didn't touch tags writes nothing. Round trips are
 // fixed at three regardless of tag count, and the two link-table writes go
 // through db.batch(), which Neon runs as a single transaction.
-async function setRecipeTags(recipeId: string, rawNames: string[]) {
+//
+// Tags are per-user (see db/schema.ts): the upsert and the id lookup are both
+// scoped by ownerId, so two people can each have their own "vegan" tag and
+// never see or collide with the other's.
+async function setRecipeTags(recipeId: string, ownerId: string, rawNames: string[]) {
   const names = Array.from(
     new Set(rawNames.map((name) => name.trim().toLowerCase()).filter(Boolean)),
   );
@@ -65,13 +84,13 @@ async function setRecipeTags(recipeId: string, rawNames: string[]) {
   // ignore the ones that already exist, then read back the ids for the whole set.
   await db
     .insert(tags)
-    .values(names.map((name) => ({ name })))
-    .onConflictDoNothing({ target: tags.name });
+    .values(names.map((name) => ({ ownerId, name })))
+    .onConflictDoNothing({ target: [tags.ownerId, tags.name] });
 
   const rows = await db
     .select({ id: tags.id })
     .from(tags)
-    .where(inArray(tags.name, names));
+    .where(and(eq(tags.ownerId, ownerId), inArray(tags.name, names)));
   const tagIds = rows.map((r) => r.id);
 
   await db.batch([
@@ -100,11 +119,14 @@ export async function createRecipe(
   const title = str(formData.get("title"));
   if (!title) return { error: "Give the recipe a title before saving." };
 
+  const user = await requireCurrentUser();
+
   let createdId: string;
   try {
     const [created] = await db
       .insert(recipes)
       .values({
+        ownerId: user.id,
         title,
         sourceUrl: strOrNull(formData.get("sourceUrl")),
         sourceType: strOrNull(formData.get("sourceType")) ?? "manual",
@@ -119,7 +141,7 @@ export async function createRecipe(
       })
       .returning();
 
-    await setRecipeTags(created.id, formData.getAll("tag").map(String));
+    await setRecipeTags(created.id, user.id, formData.getAll("tag").map(String));
     createdId = created.id;
   } catch {
     return { error: SAVE_FAILED };
@@ -142,6 +164,8 @@ export async function updateRecipe(
   const title = str(formData.get("title"));
   if (!title) return { error: "Give the recipe a title before saving." };
 
+  const user = await requireCurrentUser();
+
   try {
     await db
       .update(recipes)
@@ -157,9 +181,9 @@ export async function updateRecipe(
         ovenTemp: strOrNull(formData.get("ovenTemp")),
         wantToMake: formData.get("wantToMake") === "on",
       })
-      .where(eq(recipes.id, id));
+      .where(and(eq(recipes.id, id), eq(recipes.ownerId, user.id)));
 
-    await setRecipeTags(id, formData.getAll("tag").map(String));
+    await setRecipeTags(id, user.id, formData.getAll("tag").map(String));
   } catch {
     return { error: SAVE_FAILED };
   }
@@ -173,6 +197,22 @@ export async function updateRecipe(
 // Same bind pattern: the delete button's form calls deleteRecipe.bind(null, id).
 // No FormData needed here, so the bound function takes no other arguments.
 export async function deleteRecipe(id: string) {
+  const user = await requireCurrentUser();
+
+  // Ownership check first, before touching Blob storage: without this, an
+  // id belonging to someone else's recipe would still match rows in the
+  // images SELECT below (recipe_image has no ownerId of its own, only via
+  // its parent recipe), and those blobs would get deleted for real even
+  // though the recipes DELETE at the end would then match nothing. Checking
+  // ownership up front means every following step only ever touches your
+  // own data.
+  const [owned] = await db
+    .select({ id: recipes.id })
+    .from(recipes)
+    .where(and(eq(recipes.id, id), eq(recipes.ownerId, user.id)))
+    .limit(1);
+  if (!owned) redirect("/");
+
   // recipe_image rows cascade-delete with the recipe (FK on delete cascade),
   // but that only removes the DB rows, not the actual files sitting in Blob
   // storage. Without this, every deleted recipe's photos leak forever with no
@@ -200,11 +240,29 @@ export async function deleteRecipe(id: string) {
 // propagate; the client catches them and shows a toast, same pattern as
 // toggleWantToMake/setRating.
 export async function addRecipeImage(recipeId: string, url: string) {
+  const user = await requireCurrentUser();
+
+  const [owned] = await db
+    .select({ id: recipes.id })
+    .from(recipes)
+    .where(and(eq(recipes.id, recipeId), eq(recipes.ownerId, user.id)))
+    .limit(1);
+  if (!owned) throw new Error("Not found");
+
   await db.insert(recipeImages).values({ recipeId, url });
   revalidatePath(`/recipes/${recipeId}`);
 }
 
 export async function deleteRecipeImage(imageId: string, recipeId: string, url: string) {
+  const user = await requireCurrentUser();
+
+  const [owned] = await db
+    .select({ id: recipes.id })
+    .from(recipes)
+    .where(and(eq(recipes.id, recipeId), eq(recipes.ownerId, user.id)))
+    .limit(1);
+  if (!owned) throw new Error("Not found");
+
   // DB row first, then the blob: if the blob delete fails, the row (the only
   // thing the gallery actually reads) is already gone, so the photo still
   // disappears correctly and the leftover blob is just harmless orphaned
@@ -218,23 +276,13 @@ export async function deleteRecipeImage(imageId: string, recipeId: string, url: 
   });
 }
 
-// The login form on /login posts here. One shared password, compared against
-// APP_PASSWORD. On success, issue a random session token: the raw token goes
-// in the cookie, only its hash is stored server-side in `session`. The proxy
-// looks the hashed cookie value up on every request, so a session can be
-// revoked (logout, or an expiry sweep) without touching any other session.
-export async function login(formData: FormData) {
-  const password = String(formData.get("password") ?? "");
-  const from = str(formData.get("from"));
-  const secret = process.env.APP_PASSWORD;
-
-  if (!secret || !timingSafeEqual(password, secret)) {
-    redirect(`/login?error=1${from ? `&from=${encodeURIComponent(from)}` : ""}`);
-  }
-
+// Shared by login and signup: issue a session for `userId` and land on `from`
+// (or "/" if there wasn't one, or it wasn't a safe same-origin path).
+async function startSession(userId: string, from: string): Promise<never> {
   const token = randomToken();
   await db.insert(sessions).values({
     id: await sessionId(token),
+    userId,
     expiresAt: new Date(Date.now() + SESSION_TTL_MS),
   });
 
@@ -252,8 +300,67 @@ export async function login(formData: FormData) {
   redirect(safeFrom);
 }
 
+// The login form on /login posts here. Real per-account credentials now
+// (see DECISIONS: growing past the single-shared-password model): look the
+// user up by email, verify the password against their stored bcrypt hash.
+// On success, issue a random session token: the raw token goes in the
+// cookie, only its hash is stored server-side in `session`. The proxy looks
+// the hashed cookie value up on every request, so a session can be revoked
+// (logout, or an expiry sweep) without touching any other session.
+export async function login(formData: FormData) {
+  const email = str(formData.get("email")).toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const from = str(formData.get("from"));
+
+  // Honest, known gap: an unknown email returns faster than a known one with
+  // a wrong password, since bcrypt.compare only runs in the second case.
+  // A real fix compares against a precomputed dummy hash either way; skipped
+  // for now rather than hand-typing a bcrypt hash literal that could be
+  // malformed and throw, same size of tradeoff as the login-rate-limiting
+  // gap already documented in DECISIONS.
+  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const valid = user ? await verifyPassword(password, user.passwordHash) : false;
+
+  if (!user || !valid) {
+    // Carry the typed email back through the redirect, same as `from`, so
+    // the form doesn't come back empty, only the password needs retyping.
+    const qs = new URLSearchParams({ error: "1" });
+    if (from) qs.set("from", from);
+    if (email) qs.set("email", email);
+    redirect(`/login?${qs}`);
+  }
+
+  await startSession(user.id, from);
+}
+
+// The signup form on /signup posts here. Validates the email is unique, hashes
+// the password (never stored or logged in plain text, even for the moment
+// between form submit and hash), creates the account, then signs them
+// straight in, same session-issuing code login uses.
+export async function signup(formData: FormData) {
+  const email = str(formData.get("email")).toLowerCase();
+  const password = String(formData.get("password") ?? "");
+
+  if (!email || !email.includes("@")) {
+    redirect(`/signup?error=${encodeURIComponent("Enter a valid email.")}`);
+  }
+  if (password.length < 8) {
+    redirect(`/signup?error=${encodeURIComponent("Password must be at least 8 characters.")}`);
+  }
+
+  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+  if (existing) {
+    redirect(`/signup?error=${encodeURIComponent("An account with that email already exists.")}`);
+  }
+
+  const passwordHash = await hashPassword(password);
+  const [user] = await db.insert(users).values({ email, passwordHash }).returning();
+
+  await startSession(user.id, "/");
+}
+
 // Deletes this device's session row, so only this cookie stops working.
-// Other devices signed in with the same shared password are unaffected.
+// Other devices signed into the same account are unaffected.
 export async function logout() {
   const store = await cookies();
   const token = store.get(AUTH_COOKIE)?.value;
@@ -267,7 +374,11 @@ export async function logout() {
 // Called directly from a Client Component's onClick, not from a <form>. No
 // redirect: the user stays exactly where they are, so this only revalidates.
 export async function toggleWantToMake(id: string, next: boolean) {
-  await db.update(recipes).set({ wantToMake: next }).where(eq(recipes.id, id));
+  const user = await requireCurrentUser();
+  await db
+    .update(recipes)
+    .set({ wantToMake: next })
+    .where(and(eq(recipes.id, id), eq(recipes.ownerId, user.id)));
 
   revalidatePath("/");
   revalidatePath(`/recipes/${id}`);
@@ -276,11 +387,12 @@ export async function toggleWantToMake(id: string, next: boolean) {
 // Same pattern as toggleWantToMake. 0 (or anything out of range) clears the
 // rating back to null.
 export async function setRating(id: string, rating: number) {
+  const user = await requireCurrentUser();
   const valid = Number.isInteger(rating) && rating >= 1 && rating <= 5;
   await db
     .update(recipes)
     .set({ rating: valid ? rating : null })
-    .where(eq(recipes.id, id));
+    .where(and(eq(recipes.id, id), eq(recipes.ownerId, user.id)));
 
   revalidatePath("/");
   revalidatePath(`/recipes/${id}`);
@@ -290,7 +402,9 @@ export async function setRating(id: string, rating: number) {
 // the database itself: it fetches, tries to extract a recipe, and hands
 // whatever it found to the real add-recipe form via the URL, as searchParams.
 // If nothing was found, every field is simply absent and the form is empty,
-// the "paste it yourself" rung of the fallback ladder.
+// the "paste it yourself" rung of the fallback ladder. No ownership check
+// needed, it doesn't touch any specific recipe, proxy.ts already guarantees
+// a signed-in user reached this at all.
 export async function importFromUrl(formData: FormData) {
   const url = str(formData.get("importUrl"));
   const params = new URLSearchParams();

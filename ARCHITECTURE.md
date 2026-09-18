@@ -42,38 +42,48 @@ the server/client boundary, and the caching model.
 - **"Want to make" toggle** (detail page) and a **1-5 star rating** (cards + detail): both
   optimistic, instant. The toggle isn't shown on the list cards themselves right now, that
   surface is being redesigned (see LOG).
-- **One-user auth**: a shared password checked in `proxy.ts` before every request.
+- **Real multi-user auth**: sign up with an email and password, sign in, sign out.
+  `proxy.ts` checks only "is somebody signed in"; every recipe, tag, and image belongs to
+  one account and is filtered or ownership-checked in the data layer, not just gated at
+  the door. Grown (16/09/2026) from the original one-user shared-password model, see
+  DECISIONS.
 - **Deployed** on Vercel with Postgres on Neon.
 
 ## Data model
 
-Five tables, deliberately flat (`db/schema.ts`):
+Six tables (`db/schema.ts`):
 
-- **`recipe`**: one row per recipe. `ingredients` and `steps` are plain `text` columns, one
-  item per line, *not* their own tables. Normalising the ingredient graph (units,
-  substitutions) is a real problem and explicitly out of scope here. `want_to_make` (bool)
-  and `rating` (nullable int) are added as the app grew. `prep_time` / `cook_time` /
-  `oven_temp` are also plain nullable `text`, same call as ingredients/steps: "20 min" and
-  "180C fan" need to just work, parsing/normalising units is project 2's problem.
-- **`tag`**: one row per tag name, unique. A tag exists once and is pointed at, so renaming
-  or listing all tags is a single-row operation.
+- **`user`**: one row per account. `email` (unique), `passwordHash` (bcrypt), `createdAt`.
+  Added when the app grew from one shared password to real accounts; every `recipe` and
+  `tag` now belongs to one of these.
+- **`recipe`**: one row per recipe. `ownerId` (FK to `user`, `on delete cascade`) scopes it
+  to one account. `ingredients` and `steps` are plain `text` columns, one item per line, not
+  their own tables. `want_to_make` (bool) and `rating` (nullable int) are added as the app
+  grew. `prep_time` / `cook_time` / `oven_temp` are also plain nullable `text`: "20 min" and
+  "180C fan" need to just work, no normalising attempted.
+- **`tag`**: one row per `(ownerId, name)` pair, unique per account, not globally. Two
+  accounts can each have their own "vegan" tag; neither sees the other's. Grown from a
+  single global `unique(name)` when tags stopped being global, see DECISIONS.
 - **`recipe_tag`**: the join table. Each row is one `(recipe_id, tag_id)` pairing, composite
   primary key, both foreign keys `on delete cascade`. This many-to-many is the one modelling
   concept the project is here to practice: a recipe has many tags, a tag applies to many
   recipes.
 - **`session`**: one row per signed-in device. `id` is `SHA-256(token)`, never the raw token;
-  `expiresAt` is checked, and the row deleted, on the next request that presents an expired
-  cookie (lazy sweep, no scheduled job). Not part of the recipe data model, it exists so auth
-  has somewhere server-side to revoke from; see "Signing in" below.
+  `userId` (FK to `user`, `on delete cascade`) says which account this device is signed in
+  as. `expiresAt` is checked, and the row deleted, on the next request that presents an
+  expired cookie (lazy sweep, no scheduled job). Not part of the recipe data model, it
+  exists so auth has somewhere server-side to revoke from; see "Signing in" below.
 - **`recipe_image`**: a recipe's photo gallery, one-to-many, `recipe_id` FK `on delete
   cascade`, `url` pointing at a Vercel Blob object. Deliberately separate from
   `recipe.image_url` (the single pasted/captured cover shown on cards): uploading a gallery
   photo never changes the card thumbnail, that stays an explicit choice via the Image URL
-  field.
+  field. Ownership is implied through `recipe_id`, no `ownerId` of its own.
 
 `id`s are `uuid` with a database default, except `session.id`, which is a hash string.
 `created_at` / `updated_at` are `timestamptz`; `updated_at` is bumped by Drizzle on every
-`update()`, no DB trigger.
+`update()`, no DB trigger. `recipe.ownerId` and `tag.ownerId` were briefly nullable
+mid-Phase-1, pending a one-off backfill of pre-multi-user data; both are `NOT NULL` again
+now that the backfill ran, see LOG's "Growing past v1: Phase 1" entry.
 
 ## Request lifecycles
 
@@ -112,19 +122,37 @@ Five tables, deliberately flat (`db/schema.ts`):
    `defaultValue`s. If nothing was found, the form is just empty with a notice.
 5. From here the user reviews and submits the normal save form (lifecycle above).
 
-### Signing in
+### Signing up and signing in
 
 1. Any request without a session `proxy.ts` recognizes as valid hits it first, which
-   `redirect`s to `/login?from=<the path they wanted>`.
-2. `/login` shows a password form posting to the `login` Server Action.
-3. `login` compares the submitted password to `APP_PASSWORD`. Wrong: redirect back to
-   `/login?error=1`. Right: generate a random token, insert a `session` row keyed by
-   `SHA-256(token)` with a 30-day `expiresAt`, and set an httpOnly cookie holding the raw
-   token, then `redirect()` to `from`.
-4. Every later request carries that cookie; `proxy.ts` hashes it and looks the row up in
+   `redirect`s to `/login?from=<the path they wanted>`. `/login` and `/signup` themselves
+   are excluded from the matcher, they have to stay reachable while signed out.
+2. `/signup` shows an email + password form posting to the `signup` Server Action, which
+   validates the email shape and an 8-character password minimum, checks the email isn't
+   already taken, hashes the password (`bcryptjs`), inserts a `user` row, then signs them
+   in immediately (shares a `startSession()` helper with `login`, below).
+3. `/login` shows an email + password form posting to the `login` Server Action. `login`
+   looks the account up by email and compares the password against its stored hash
+   (`bcrypt.compare`, constant-time by design). Wrong on either count: redirect back to
+   `/login?error=1` with the same generic "wrong email or password" message either way
+   (doesn't reveal which part was wrong).
+4. On success (either flow), `startSession()` generates a random token, inserts a
+   `session` row keyed by `SHA-256(token)` with a 30-day `expiresAt` and the account's
+   `userId`, and sets an httpOnly cookie holding the raw token, then `redirect()`s to
+   `from` (signup always goes to `/`).
+5. Every later request carries that cookie; `proxy.ts` hashes it and looks the row up in
    `session`, rejecting if the row is missing or `expiresAt` has passed (deleting it in the
-   latter case). "Sign out" runs the `logout` action, which deletes this device's `session`
-   row by hash, then clears the cookie, so only this device is signed out.
+   latter case) — this only answers "is somebody signed in". *Who*, for pages and Server
+   Actions that need it, comes from `getCurrentUser()`/`requireCurrentUser()`
+   (`app/lib/session.ts`), which re-runs the same cookie-to-session-to-user lookup rather
+   than `proxy.ts` trying to pass data downstream (Next has no clean channel for that).
+   `React.cache()` collapses repeat calls within one request to a single query.
+6. Every read and mutation that touches recipe data filters or ownership-checks by that
+   user's id (`WHERE owner_id = ...`, or an explicit pre-check before a delete/update),
+   *in the data layer*, not just at the `proxy.ts` gate — that gate can't know which rows
+   a given page or action is about to touch. "Sign out" runs the `logout` action, which
+   deletes this device's `session` row by hash, then clears the cookie, so only this
+   device is signed out.
 
 ## File map
 
@@ -135,13 +163,15 @@ Five tables, deliberately flat (`db/schema.ts`):
 | `app/recipes/[id]/page.tsx` | One recipe at `/recipes/:id` | Dynamic route, `await params`, `generateMetadata`, `notFound()` |
 | `app/recipes/new/page.tsx` | Add form at `/recipes/new` | Server Component form, `<form action={}>` |
 | `app/recipes/[id]/edit/page.tsx` | Edit form at `/recipes/:id/edit` | pre-filled form, `updateRecipe.bind(null, id)` |
-| `app/login/page.tsx` | Password form at `/login` | posts to the `login` Server Action |
-| `app/lib/actions.ts` | every mutation: `createRecipe`, `updateRecipe`, `deleteRecipe`, `toggleWantToMake`, `setRating`, `importFromUrl`, `login`, `logout` | Server Actions (`"use server"`), `.bind()`, `revalidatePath`, `redirect`, `cookies()`; `createRecipe`/`updateRecipe` return a `FormState` for `useActionState` |
+| `app/login/page.tsx` | Email + password form at `/login` | posts to the `login` Server Action |
+| `app/signup/page.tsx` | Email + password form at `/signup` | posts to the `signup` Server Action |
+| `app/lib/actions.ts` | every mutation: `createRecipe`, `updateRecipe`, `deleteRecipe`, `toggleWantToMake`, `setRating`, `importFromUrl`, `signup`, `login`, `logout` | Server Actions (`"use server"`), `.bind()`, `revalidatePath`, `redirect`, `cookies()`; `createRecipe`/`updateRecipe` return a `FormState` for `useActionState`; every mutation but `importFromUrl` calls `requireCurrentUser()` and scopes or ownership-checks by it |
 | `app/error.tsx` | route-level error boundary | `"use client"`, `error` + `reset` props |
 | `app/global-error.tsx` | root-layout error boundary | `"use client"`, renders its own `<html>`/`<body>` |
-| `app/lib/data.ts` | `getRecipeById`, `getRecipes`, `getAllTagNames` | server-side read helpers; manual join + group-in-JS for the filterable list (sorted in SQL before grouping), Drizzle's relational `with` for the single-recipe read |
+| `app/lib/data.ts` | `getRecipeById`, `getRecipes`, `getAllTagNames`, each taking an `ownerId` | server-side read helpers; manual join + group-in-JS for the filterable list (sorted in SQL before grouping), Drizzle's relational `with` for the single-recipe read |
 | `app/lib/capture.ts` | `captureFromWebUrl` | server-side `fetch` of a third-party page, never runs in the browser |
-| `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `randomToken`, `sessionId`, `timingSafeEqual` | Web-Crypto only; portable, not runtime-forced (`proxy.ts` runs on Node, not Edge, see below), shared by the proxy and the login/logout actions |
+| `app/lib/auth.ts` | `AUTH_COOKIE`, `sha256Hex`, `randomToken`, `sessionId`, `hashPassword`, `verifyPassword` | session helpers are Web-Crypto only, portable, not runtime-forced (`proxy.ts` runs on Node, not Edge, see below); `hashPassword`/`verifyPassword` wrap `bcryptjs`; shared by the proxy and the signup/login/logout actions |
+| `app/lib/session.ts` | `getCurrentUser()` (React.cache), `requireCurrentUser()` | re-derives "who is this" from the cookie, for Server Components/Actions `proxy.ts` can't pass data to directly |
 | `app/components/want-to-make-toggle.tsx` | the toggle button (detail page only, for now) | `"use client"`, `useOptimistic` |
 | `app/components/search-box.tsx` | the live search input | `"use client"`, debounced `router.replace` |
 | `app/components/sort-select.tsx` | the list page's sort dropdown | `"use client"`, `useSearchParams` + `router.replace`, plain `<select>` inside the same GET form for the no-JS path |
@@ -152,10 +182,11 @@ Five tables, deliberately flat (`db/schema.ts`):
 | `components/recipe-form.tsx` | the `<form>` shell around `RecipeFields` for add and edit | `"use client"`, `useActionState`, `useFormStatus` |
 | `components/recipe-checklist.tsx` | cross off ingredients/steps on the detail page | `"use client"`, reads/writes `localStorage` after mount (not the DB), guards against a hydration mismatch by only setting state in an effect |
 | `app/components/photo-gallery.tsx` | the detail-page photo grid + drop zone | `"use client"`, `@vercel/blob/client`'s `upload()`, drag-and-drop + native file input |
+| `app/components/user-menu.tsx` | the header avatar + account menu (replaces the old plain Sign out button) | `"use client"`, shadcn `Avatar`/`DropdownMenu` (Base UI), `logout` called from `onClick` like `toggleWantToMake` |
 | `app/api/upload/route.ts` | mints upload tokens for `@vercel/blob/client`, one per file | Route Handler, not a Server Action, `@vercel/blob`'s client-upload contract needs a plain HTTP endpoint the browser SDK calls directly |
 | `components/tag-pill.tsx` | colour-per-tag pill + `tagColorClasses` helper | plain component |
 | `components/ui/sonner.tsx` | the toast outlet, mounted once in the layout | `"use client"` |
-| `proxy.ts` | the auth gate | runs before every matched request, on the Node.js runtime (Next 16's default for Proxy, not Edge); looks the session up in `session` on every request, redirects to `/login` if missing, unknown, or expired |
+| `proxy.ts` | the authentication gate (authorization is the data layer's job, see `app/lib/session.ts` and every `ownerId` check in `data.ts`/`actions.ts`) | runs before every matched request, on the Node.js runtime (Next 16's default for Proxy, not Edge); looks the session up in `session` on every request, redirects to `/login` if missing, unknown, or expired |
 | `app/globals.css` | Tailwind entry + shadcn theme tokens (fuchsia-purple primary, `.text-brand` gradient, `--font-heading` = Bricolage Grotesque) | (not Next specific) |
 | `components/ui/` | shadcn/ui components (button, input, card, badge, checkbox, ...) | copied into the repo, owned locally, built on Base UI |
 | `components/recipe-fields.tsx` | the card sections shared by the add and edit forms | plain component |
@@ -201,6 +232,9 @@ each because it needs real browser state or has to react to a failure.
   (`onDragOver`/`onDrop`), and each upload calls `@vercel/blob/client`'s `upload()` directly
   from the browser (straight to Blob storage, bypassing the server entirely for the file
   bytes themselves), then `addRecipeImage` to record the resulting URL.
+- `app/components/user-menu.tsx`: the header avatar menu (shadcn `Avatar` +
+  `DropdownMenu`, both Base UI under the hood). `logout` is called directly from the
+  menu item's `onClick`, same shape as `toggleWantToMake` above, not a `<form>`.
 
 ## Error handling
 
@@ -248,10 +282,11 @@ same HTTP-based driver Server Components use) rather than the pure in-memory has
 comparison it used to be. There are no static routes left: everything reads the DB,
 cookies, or `searchParams`, so all routes render on demand.
 
-Three env vars are needed in Vercel: `DATABASE_URL` (Neon), `APP_PASSWORD` (the auth gate;
-if unset, the gate is disabled and the app is public), and `BLOB_READ_WRITE_TOKEN` (Vercel
-Blob, for photo uploads; Vercel adds this one automatically once a Blob store is attached to
-the project, the other two are set by hand).
+Two env vars are needed in Vercel: `DATABASE_URL` (Neon) and `BLOB_READ_WRITE_TOKEN`
+(Vercel Blob, for photo uploads; Vercel adds this one automatically once a Blob store is
+attached to the project, `DATABASE_URL` is set by hand). `APP_PASSWORD` is retired: the
+auth gate is unconditionally on now, there's no single shared secret concept left, real
+accounts sign up through `/signup` instead.
 
 **Migrations.** Vercel builds run whatever `package.json` names `vercel-build` instead of the
 default `build` script, if that script exists. This project's `vercel-build` runs
@@ -306,3 +341,5 @@ manual `npm run db:migrate` run by hand against the shared connection string; se
 | redesign | SQL-side sort with `nullsLast` via raw `sql` | `app/lib/data.ts` `orderByFor` | `asc()`/`desc()` don't take a nulls option on a plain column (that's index-definition-only API); a raw `` sql`...DESC NULLS LAST` `` fragment does, and slots into `.orderBy()` like any other `SQL` value |
 | detail-page | First real Route Handler | `app/api/upload/route.ts` | every prior mutation was a Server Action because the caller was always this app's own UI; here the caller is `@vercel/blob/client`'s browser SDK, which needs a plain HTTP endpoint it controls the request/response shape of, exactly the "not my own frontend" case Q9 names as when you *do* need one |
 | detail-page | Client-direct upload, server never touches file bytes | `app/components/photo-gallery.tsx` + `app/api/upload/route.ts` | the Route Handler only mints a short-lived token (`handleUpload`); the actual file goes browser -> Blob storage directly, so there's no Server Action body-size limit to hit and no file streaming through a serverless function |
+| multi-user | `React.cache()` for per-request de-duping | `app/lib/session.ts` `getCurrentUser` | wraps an async function so multiple call sites within one request (a layout plus a page, say) share one underlying query instead of running it once each; already used for `getRecipeById`, extended here to the new "who is this" lookup |
+| multi-user | Proxy re-derivation pattern (authentication vs. authorization) | `app/lib/session.ts`, every `ownerId` check in `app/lib/data.ts`/`actions.ts` | Next has no channel to pass data from Proxy to a downstream Server Component/Action, so `getCurrentUser()` just re-runs the same cheap cookie -> session -> user lookup `proxy.ts` already does, rather than threading state through headers; `proxy.ts` itself now only answers "is somebody signed in", per-row authorization (whose recipe is this) moved entirely into the data layer |

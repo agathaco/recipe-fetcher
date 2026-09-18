@@ -4,11 +4,13 @@ import { defineConfig, devices } from "@playwright/test";
 // E2E runs against the dev database (the DATABASE_URL in .env.local). Every test
 // names its data with an "e2e-" prefix and global-teardown deletes anything
 // matching, so a crashed run leaves at most one stray recipe. A dedicated Neon
-// branch would be cleaner; this keeps setup to zero.
+// branch would be cleaner; this keeps setup to zero. No APP_PASSWORD anymore:
+// real accounts replaced the single shared password, each test signs its own
+// account up.
 loadEnv({ path: ".env.local" });
 
-if (!process.env.APP_PASSWORD || !process.env.DATABASE_URL) {
-  throw new Error("E2E needs APP_PASSWORD and DATABASE_URL in .env.local");
+if (!process.env.DATABASE_URL) {
+  throw new Error("E2E needs DATABASE_URL in .env.local");
 }
 
 export default defineConfig({

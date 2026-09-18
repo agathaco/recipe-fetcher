@@ -1,26 +1,46 @@
 import { config } from "dotenv";
+import { eq } from "drizzle-orm";
 
 // Load env before importing ./index (which throws if DATABASE_URL is missing).
 // Static imports hoist, so ./index and ./schema are pulled in dynamically below.
 config({ path: ".env.local" });
 
 const { db } = await import("./index.js");
-const { recipes, tags, recipeTags } = await import("./schema.js");
+const { recipes, tags, recipeTags, users } = await import("./schema.js");
+
+// Recipes and tags are per-user now (see DECISIONS: tags becoming per-user),
+// so seeding needs a real account to own the rows. Seeds into the first
+// account it finds, or the one matching SEED_EMAIL if given; there's no
+// account to invent one for, has to exist already via /signup.
+const seedEmail = process.env.SEED_EMAIL;
+const [owner] = seedEmail
+  ? await db.select().from(users).where(eq(users.email, seedEmail))
+  : await db.select().from(users).limit(1);
+if (!owner) {
+  throw new Error(
+    seedEmail
+      ? `No account found for SEED_EMAIL=${seedEmail}. Sign up at /signup first.`
+      : "No accounts exist yet. Sign up at /signup first, then re-run the seed.",
+  );
+}
+console.log(`Seeding recipes for ${owner.email} (${owner.id})`);
 
 console.log("Clearing existing rows...");
-await db.delete(recipeTags);
-await db.delete(recipes);
-await db.delete(tags);
+// recipe_tag rows cascade off recipe.id (onDelete: "cascade" in schema.ts),
+// so deleting this owner's recipes clears their tag links too, no separate
+// recipeTags delete needed, and other accounts' rows are never touched.
+await db.delete(recipes).where(eq(recipes.ownerId, owner.id));
+await db.delete(tags).where(eq(tags.ownerId, owner.id));
 
 console.log("Inserting tags...");
 const tagRows = await db
   .insert(tags)
   .values([
-    { name: "dessert" },
-    { name: "baking" },
-    { name: "quick" },
-    { name: "vegetarian" },
-    { name: "dinner" },
+    { name: "dessert", ownerId: owner.id },
+    { name: "baking", ownerId: owner.id },
+    { name: "quick", ownerId: owner.id },
+    { name: "vegetarian", ownerId: owner.id },
+    { name: "dinner", ownerId: owner.id },
   ])
   .returning();
 
@@ -86,7 +106,9 @@ const recipeRows = await db
       notes: "The miso makes it. Do not skip.",
       wantToMake: true,
     },
-  ])
+    // ownerId is the same for every row, added via .map() below rather than
+    // repeated 5 times inline.
+  ].map((r) => ({ ...r, ownerId: owner.id })))
   .returning();
 
 console.log("Linking recipes to tags...");

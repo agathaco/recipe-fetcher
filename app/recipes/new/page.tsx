@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { createRecipe, importFromUrl } from "@/app/lib/actions";
 import { getAllTagNames } from "@/app/lib/data";
 import { param } from "@/app/lib/params";
+import { requireCurrentUser } from "@/app/lib/session";
 
 export const metadata = { title: "Add a recipe" };
 
@@ -16,10 +17,11 @@ export default async function NewRecipePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const user = await requireCurrentUser();
   const params = await searchParams;
   const importFailed = param(params.importFailed) === "1";
   const imageUrl = param(params.imageUrl);
-  const allTags = await getAllTagNames();
+  const allTags = await getAllTagNames(user.id);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10">

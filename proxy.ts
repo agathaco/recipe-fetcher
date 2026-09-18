@@ -7,14 +7,15 @@ import { sessions } from "@/db/schema";
 import { AUTH_COOKIE, sessionId } from "@/app/lib/auth";
 
 // Next 16 renamed Middleware to Proxy. Same thing: code that runs before every
-// matched request. This is the whole auth story for a one-user app: look up
-// the session on every request, redirect to /login if it's missing, unknown,
-// or expired. A real multi-user app would also verify identity in the data
-// layer, not trust the proxy alone.
+// matched request: look up the session, redirect to /login if it's missing,
+// unknown, or expired. This is the authentication gate only, "is somebody
+// signed in." It says nothing about *who*, and it never scopes data by
+// owner, that's the data layer's job now (see app/lib/session.ts's
+// getCurrentUser and every WHERE ownerId = ... in app/lib/data.ts and
+// actions.ts). A real per-row authorization check has to happen next to the
+// query that touches the row; the proxy can't know which rows a page or
+// action is about to read or write.
 export async function proxy(request: NextRequest) {
-  const secret = process.env.APP_PASSWORD;
-  if (!secret) return NextResponse.next(); // no password configured: gate is off (local dev default)
-
   const token = request.cookies.get(AUTH_COOKIE)?.value;
   const valid = token ? await hasValidSession(token) : false;
 
@@ -45,7 +46,8 @@ async function hasValidSession(token: string): Promise<boolean> {
 }
 
 export const config = {
-  // Run on everything except Next internals, static assets, and the login route
-  // itself (which has to stay reachable while signed out).
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  // Run on everything except Next internals, static assets, and the login
+  // and signup routes themselves (which have to stay reachable while signed
+  // out, that's the whole point of them).
+  matcher: ["/((?!login|signup|_next/static|_next/image|favicon.ico|icon.svg).*)"],
 };

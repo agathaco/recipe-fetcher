@@ -1,8 +1,12 @@
-// Shared by proxy.ts and the login/logout actions. Uses only Web Crypto, which
-// exists in both Edge and Node, so this one implementation is portable rather
-// than tied to whichever runtime Proxy happens to use (Next 16 defaults Proxy
-// to the Node.js runtime, not Edge; older Next versions, and this file's own
-// comment until 16/09, assumed Edge, that assumption was wrong for this app).
+// Session/token helpers shared by proxy.ts and the login/logout/signup
+// actions, plus password hashing for real accounts (bcryptjs). The
+// session-token helpers use only Web Crypto, which exists in both Edge and
+// Node, so this one implementation is portable rather than tied to whichever
+// runtime Proxy happens to use (Next 16 defaults Proxy to the Node.js
+// runtime, not Edge; older Next versions, and this file's own comment until
+// 16/09, assumed Edge, that assumption was wrong for this app).
+
+import bcrypt from "bcryptjs";
 
 export const AUTH_COOKIE = "rf_auth";
 
@@ -34,21 +38,23 @@ export function sessionId(token: string): Promise<string> {
   return sha256Hex(token);
 }
 
-// Constant-time string comparison: touches every character regardless of
-// where the first mismatch is, so response timing can't be used to narrow
-// down a guess character by character. `!==` on the raw password does not
-// have this property (JS string equality can short-circuit at the first
-// differing character).
-export function timingSafeEqual(a: string, b: string): boolean {
-  const bytesA = new TextEncoder().encode(a);
-  const bytesB = new TextEncoder().encode(b);
-  // Comparing against a fixed-length copy of `b` keeps the loop length
-  // independent of `a`'s length too, not just which byte differs.
-  const paddedA = new Uint8Array(bytesB.length);
-  paddedA.set(bytesA.subarray(0, bytesB.length));
-  let diff = bytesA.length ^ bytesB.length;
-  for (let i = 0; i < bytesB.length; i++) {
-    diff |= paddedA[i] ^ bytesB[i];
-  }
-  return diff === 0;
+// Password hashing for real accounts (bcryptjs, pure JS, no native binary to
+// compile, which matters for serverless cold starts). Deliberately not
+// sha256Hex: bcrypt is salted per-hash and slow on purpose, so a leaked
+// `user` table can't be cracked offline just by hashing a big password list
+// once and comparing, the way it could against a bare SHA-256 digest. A
+// session token (256 bits of fresh randomness, see randomToken) doesn't need
+// this, there's nothing to guess; a human-chosen password does.
+const BCRYPT_ROUNDS = 12;
+
+export function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
+}
+
+// bcrypt.compare is constant-time internally (it re-derives the hash from
+// the candidate and compares digests, not characters of the password), so
+// this replaces the manual timingSafeEqual() this file had for the old
+// single-shared-password model, that model is gone, this is its successor.
+export function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
 }

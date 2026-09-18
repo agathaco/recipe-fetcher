@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { RecipeForm } from "@/components/recipe-form";
 import { updateRecipe } from "@/app/lib/actions";
 import { getAllTagNames, getRecipeById } from "@/app/lib/data";
+import { requireCurrentUser } from "@/app/lib/session";
 
 export default async function EditRecipePage({
   params,
@@ -12,7 +13,11 @@ export default async function EditRecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [recipe, allTags] = await Promise.all([getRecipeById(id), getAllTagNames()]);
+  const user = await requireCurrentUser();
+  const [recipe, allTags] = await Promise.all([
+    getRecipeById(id, user.id),
+    getAllTagNames(user.id),
+  ]);
   if (!recipe) notFound();
 
   // Binding `id` in a Server Component produces a Server Action reference with

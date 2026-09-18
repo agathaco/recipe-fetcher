@@ -2,7 +2,7 @@
 // Mirrors actions.ts (the write side) but has no "use server": these are plain
 // functions called directly during render, not invoked over the network.
 
-import { asc, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 import { cache } from "react";
 
 import { db } from "@/db";
@@ -20,8 +20,12 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Wrapped in React.cache so the detail page's generateMetadata and the page
-// body share one query per request instead of hitting the DB twice.
-export const getRecipeById = cache(async (id: string) => {
+// body share one query per request instead of hitting the DB twice. `ownerId`
+// is part of the cache key too (React.cache keys on all arguments), so this
+// still works correctly if it were ever called for two different users in
+// the same request, which it isn't today, but nothing here would break if it
+// were.
+export const getRecipeById = cache(async (id: string, ownerId: string) => {
   // `id` is a uuid column and Postgres throws on a malformed value. Bail early
   // so a bad URL reads as "not found"; a query that fails for any other reason
   // is a real problem and is left to reach the error boundary, not disguised
@@ -31,9 +35,12 @@ export const getRecipeById = cache(async (id: string) => {
   // Drizzle's relational query API (the `with` option): a single query that
   // walks recipe -> recipe_tag -> tag using the relations() defined in
   // schema.ts. Reasonable here because there's no cross-table filtering,
-  // just "give me this one recipe and everything attached to it."
+  // just "give me this one recipe and everything attached to it." The
+  // ownerId check is the actual authorization: someone else's recipe id
+  // just doesn't match, and reads as "not found", not "forbidden", so it
+  // gives away nothing about whether the id exists at all.
   const recipe = await db.query.recipes.findFirst({
-    where: eq(recipes.id, id),
+    where: and(eq(recipes.id, id), eq(recipes.ownerId, ownerId)),
     with: {
       recipeTags: { with: { tag: true } },
       images: { orderBy: (images, { asc }) => [asc(images.createdAt)] },
@@ -43,8 +50,12 @@ export const getRecipeById = cache(async (id: string) => {
   return { ...recipe, tags: recipe.recipeTags.map((rt) => rt.tag.name) };
 });
 
-export async function getAllTagNames(): Promise<string[]> {
-  const rows = await db.select({ name: tags.name }).from(tags).orderBy(tags.name);
+export async function getAllTagNames(ownerId: string): Promise<string[]> {
+  const rows = await db
+    .select({ name: tags.name })
+    .from(tags)
+    .where(eq(tags.ownerId, ownerId))
+    .orderBy(tags.name);
   return rows.map((r) => r.name);
 }
 
@@ -71,6 +82,7 @@ function orderByFor(sort: RecipeSort | undefined) {
 }
 
 export async function getRecipes(filters: {
+  ownerId: string;
   tag?: string;
   q?: string;
   sort?: RecipeSort;
@@ -79,12 +91,19 @@ export async function getRecipes(filters: {
   // one row per (recipe, tag) pair, grouped back into one row per recipe below.
   // The search term is on the base `recipe` row so it goes straight into SQL as
   // an ILIKE (case-insensitive LIKE); the tag filter is applied after grouping.
+  // ownerId is always required, never optional, there's no "list everyone's
+  // recipes" code path anywhere in this app.
   const rows = await db
     .select({ recipe: recipes, tagName: tags.name })
     .from(recipes)
     .leftJoin(recipeTags, eq(recipeTags.recipeId, recipes.id))
     .leftJoin(tags, eq(tags.id, recipeTags.tagId))
-    .where(filters.q ? ilike(recipes.title, `%${escapeLikePattern(filters.q)}%`) : undefined)
+    .where(
+      and(
+        eq(recipes.ownerId, filters.ownerId),
+        filters.q ? ilike(recipes.title, `%${escapeLikePattern(filters.q)}%`) : undefined,
+      ),
+    )
     .orderBy(orderByFor(filters.sort));
 
   const byId = new Map<string, RecipeWithTags>();

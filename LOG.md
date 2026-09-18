@@ -508,3 +508,63 @@ the docs need a real review pass now and then, not just updates alongside whatev
 touched them last: the Edge/Node mistake had been sitting in the codebase since day 10 and
 was never once caught, because nobody had checked it against the actual framework docs
 until this pass did.
+
+## Growing past v1: Phase 1, real multi-user auth
+
+Deliberately reopening a scope that was closed on purpose (see `DECISIONS.md`'s "Password
+auth in proxy.ts" entry, and the SPEC's original single-user framing). The plan for
+everything past this point lives at a high level in the project's own history now, not
+repeated here; this entry covers Phase 1 only: real accounts, each with their own private,
+isolated recipe collection.
+
+- New `user` table (`db/schema.ts`): `id`, `email` (unique), `passwordHash`, `createdAt`.
+  `session` gained `userId`; `recipe` and `tag` gained `ownerId`, both FKs to `user` with
+  `onDelete: "cascade"`. `tag`'s unique constraint moved from bare `name` to
+  `(ownerId, name)`, tags stopped being global, see DECISIONS.
+- `app/lib/auth.ts`: added `hashPassword`/`verifyPassword` via `bcryptjs`, replacing
+  `APP_PASSWORD` and retiring the `timingSafeEqual()` helper added the session before
+  (bcrypt's `compare` is constant-time internally, nothing left to protect by hand). See
+  DECISIONS for why bcrypt over `scrypt`, and why hand-rolled over Auth.js.
+- New `app/lib/session.ts`: `getCurrentUser()` (React.cache-wrapped, re-derives the
+  session from the cookie, same query `proxy.ts` already runs) and `requireCurrentUser()`
+  (same, but redirects to `/login` if there's no session). Solves the "Proxy can't pass
+  data downstream" problem without threading anything through headers, see DECISIONS.
+- `app/lib/actions.ts`: new `signup` action. `login` now looks up by email instead of
+  comparing one shared secret. Every mutation (`createRecipe`, `updateRecipe`,
+  `deleteRecipe`, `toggleWantToMake`, `setRating`, `addRecipeImage`, `deleteRecipeImage`,
+  `setRecipeTags`) now calls `requireCurrentUser()` and scopes its query by `ownerId`,
+  not just by id. `deleteRecipe` checks ownership *before* touching Blob storage, not
+  after, a real bug caught while writing this: without that ordering, one account could
+  have deleted another account's uploaded photos from Blob even though the DB row itself
+  would've survived (the id+ownerId WHERE clause would silently match nothing).
+- `app/lib/data.ts`: `getRecipes`, `getRecipeById`, `getAllTagNames` all take an `ownerId`
+  and filter by it.
+- New `app/signup/page.tsx`; `app/login/page.tsx` gained an email field and a link to
+  `/signup`. `proxy.ts`'s matcher excludes both now. Every page that reads recipe data
+  calls `requireCurrentUser()` first and threads `user.id` through.
+- **Migration safety:** `recipe.ownerId` and `tag.ownerId` are nullable in the schema for
+  now, on purpose (a plain `ADD COLUMN ... NOT NULL` fails against the existing rows in
+  the real database, there's no value to backfill it with yet). The generated migration
+  also has a hand-added `DELETE FROM "session"` before `session.user_id` goes `NOT NULL`,
+  old sessions have no real user to point at, so they're just cleared instead, every
+  signed-in browser gets bounced to `/login` once. Once a real account exists and its
+  recipes/tags are backfilled by hand, a follow-up migration sets both columns back to
+  `NOT NULL` and the schema is updated to match.
+- Test updates: `auth.test.ts` gained coverage for `hashPassword`/`verifyPassword`
+  (verifies correctly, rejects a wrong password, salts identically-valued passwords
+  differently). `e2e/auth.spec.ts` reworked to sign up a fresh account per run instead of
+  asserting against one shared `APP_PASSWORD`, plus a new cross-account isolation test
+  (account B never sees account A's recipe). `e2e/helpers.ts`'s `signIn` now signs a
+  fresh account up too, so `recipes.spec.ts` didn't need to change. `global-teardown.ts`
+  now also deletes `e2e-`-prefixed `user` rows (cascades to their recipes/tags/sessions).
+- `npm run typecheck`, `lint`, `test:run` (41 passing) and `build` all clean.
+- **Not yet done:** the migration hasn't been applied to the real database yet (blocked by
+  the sandbox's auto-classifier on `db:migrate` against the shared Neon DB, same as
+  earlier this session), so the manual ownership backfill and the follow-up
+  tighten-to-`NOT NULL` migration are both still pending. `ARCHITECTURE.md` and
+  `INTERVIEW.md` still describe the single-user model and need rewriting to match this.
+- **Taught:** per-row authorization vs. authentication as separate concerns, migrating a
+  schema safely against data that already exists, `React.cache()` for de-duping a query
+  across a request, and confronting a decision this project's own docs had predicted
+  ("Password auth in proxy.ts" said flipping to a second user would mean Auth.js) instead
+  of quietly doing something else.

@@ -12,6 +12,7 @@ import { tagColorClasses } from "@/components/tag-pill";
 import { buttonVariants } from "@/components/ui/button";
 import { deleteRecipe } from "@/app/lib/actions";
 import { getRecipeById } from "@/app/lib/data";
+import { requireCurrentUser } from "@/app/lib/session";
 
 // The link text should read as "the site this came from", not the literal
 // word "Source" or the internal sourceType label. Hostname minus "www." is
@@ -30,7 +31,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const recipe = await getRecipeById(id);
+  const user = await requireCurrentUser();
+  const recipe = await getRecipeById(id, user.id);
   return { title: recipe ? recipe.title : "Recipe not found" };
 }
 
@@ -44,7 +46,8 @@ export default async function RecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const recipe = await getRecipeById(id);
+  const user = await requireCurrentUser();
+  const recipe = await getRecipeById(id, user.id);
   if (!recipe) notFound();
 
   const deleteThisRecipe = deleteRecipe.bind(null, recipe.id);

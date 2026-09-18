@@ -7,11 +7,12 @@ import { cn } from "cn";
 import { StarRow } from "@/components/star-row";
 import { TagPill, tagColorClasses } from "@/components/tag-pill";
 import { badgeVariants } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { logout } from "@/app/lib/actions";
+import { UserMenu } from "@/app/components/user-menu";
 import { getAllTagNames, getRecipes, type RecipeSort } from "@/app/lib/data";
 import { param } from "@/app/lib/params";
+import { requireCurrentUser } from "@/app/lib/session";
 
 const SORT_VALUES: RecipeSort[] = ["date", "name", "rating"];
 
@@ -37,6 +38,7 @@ export default async function HomePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const user = await requireCurrentUser();
   const params = await searchParams;
   const tag = param(params.tag);
   const q = param(params.q);
@@ -44,24 +46,20 @@ export default async function HomePage({
   const sort = isRecipeSort(rawSort) ? rawSort : "date";
 
   const [allRecipes, allTags] = await Promise.all([
-    getRecipes({ tag, q, sort }),
-    getAllTagNames(),
+    getRecipes({ ownerId: user.id, tag, q, sort }),
+    getAllTagNames(user.id),
   ]);
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10">
       <header className="flex items-center justify-between gap-3">
         <h1 className="text-brand text-3xl font-bold tracking-tight">Recipes</h1>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-3">
           <Link href="/recipes/new" className={buttonVariants({ size: "sm" })}>
             <Plus />
             Add recipe
           </Link>
-          <form action={logout}>
-            <Button type="submit" variant="ghost" size="sm" className="text-muted-foreground">
-              Sign out
-            </Button>
-          </form>
+          <UserMenu email={user.email} />
         </div>
       </header>
 
